@@ -1,1 +1,1 @@
-# lghost
+# lghost is my reimagining of the Norton Ghost workflow of the mid-1990's. The program is basically a wrapper for partclone with dialogues for selecting images, partitions and file names. It creates an image and restores the image. That's about it.
