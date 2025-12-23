@@ -1,0 +1,7 @@
+v.0.30
+- past the prototype stage
+- now usable for both backup and restore
+- posted to github
+
+v.0.30.1
+- changed default compression from gzip to lz4. 10 times faster now with compressed files, though the compression of the image file is slightly reduced
