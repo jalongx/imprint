@@ -210,7 +210,7 @@ char *ui_enter_filename(const char *default_name)
     buf[strcspn(buf, "\r\n")] = '\0';
 
     // Debug output so we can see exactly what Zenity returned
-    fprintf(stderr, "DEBUG: filename entered: '%s'\n", buf);
+    // fprintf(stderr, "DEBUG: filename entered: '%s'\n", buf);
 
     // If user pressed Cancel or left it empty
     if (strlen(buf) == 0)

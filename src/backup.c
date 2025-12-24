@@ -1,6 +1,7 @@
 #include "backup.h"
 #include "utils.h"
 #include "ui.h"
+#include "colors.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -75,32 +76,38 @@ static char *join_path(const char *dir, const char *filename)
 
 /* Run partclone + gzip pipeline. */
 bool run_backup_pipeline(const char *backend,
-                         const char *device,
-                         const char *fs_type,
-                         const char *output_path)
+                          const char *device,
+                          const char *fs_type,
+                          const char *output_path)
 {
     if (!backend || !device || !output_path)
         return false;
 
-    /* Build the actual partclone pipeline */
-    char cmd[1024];
-    snprintf(cmd, sizeof(cmd),
-             "%s -c -s '%s' | lz4 -1 > '%s'",
+    /* Build the partclone command WITHOUT lz4 or redirection */
+    char partclone_cmd[1024];
+    snprintf(partclone_cmd, sizeof(partclone_cmd),
+             "%s -c -s '%s'",
              backend,
-             device,
-             output_path);
+             device);
 
-    /* Wrap it in pkexec so only THIS command runs as root */
-    char pk_cmd[2048];
-    snprintf(pk_cmd, sizeof(pk_cmd),
-             "pkexec sh -c \"%s\"",
-             cmd);
+    /* pkexec only wraps partclone */
+    char pk_partclone[2048];
+    snprintf(pk_partclone, sizeof(pk_partclone),
+             "pkexec %s",
+             partclone_cmd);
+
+    /* Full pipeline: root partclone → user lz4 → user output file */
+    char full_cmd[4096];
+    snprintf(full_cmd, sizeof(full_cmd),
+             "%s | lz4 -1 > '%s'",
+             pk_partclone,
+             output_path);
 
     ui_info("Backup will now start.\n\nPlease monitor the terminal for partclone progress.\nThis may take some time.");
 
-    fprintf(stderr, "DEBUG: running elevated command: %s\n", pk_cmd);
+    fprintf(stderr, YELLOW "Starting partclone...\n\n" RESET);
 
-    int rc = system(pk_cmd);
+    int rc = system(full_cmd);
     if (rc != 0) {
         ui_error("Backup failed. Please check the terminal output for details.");
         return false;
@@ -108,7 +115,6 @@ bool run_backup_pipeline(const char *backend,
 
     ui_info("Backup completed successfully.");
 
-    /* Write metadata next to the image */
     write_metadata(output_path, device, fs_type, backend);
 
     return true;
@@ -122,7 +128,7 @@ bool backup_run_interactive(void)
     if (!device) {
         return false;
     }
-    fprintf(stderr, "DEBUG: partition selected: '%s'\n", device);
+    // fprintf(stderr, "DEBUG: partition selected: '%s'\n", device);
 
     /* 2. Choose backup directory. */
     char *dir = ui_choose_directory();
@@ -130,7 +136,7 @@ bool backup_run_interactive(void)
         free(device);
         return false;
     }
-    fprintf(stderr, "DEBUG: directory selected: '%s'\n", dir);
+    // fprintf(stderr, "DEBUG: directory selected: '%s'\n", dir);
 
     /* 3. Detect filesystem type. */
     char fs_type[64] = {0};
@@ -140,7 +146,7 @@ bool backup_run_interactive(void)
         free(device);
         return false;
     }
-    fprintf(stderr, "DEBUG: filesystem detected: '%s'\n", fs_type);
+    // fprintf(stderr, "DEBUG: filesystem detected: '%s'\n", fs_type);
 
     /* 4. Map to partclone backend. */
     const char *backend = partclone_backend_for_fs(fs_type);
@@ -150,7 +156,7 @@ bool backup_run_interactive(void)
         free(device);
         return false;
     }
-    fprintf(stderr, "DEBUG: backend selected: '%s'\n", backend);
+    // fprintf(stderr, "DEBUG: backend selected: '%s'\n", backend);
 
     /* 5. Build default filename and ask user to confirm/modify. */
     char default_name[256];
@@ -162,7 +168,7 @@ bool backup_run_interactive(void)
         free(device);
         return false;
     }
-    fprintf(stderr, "DEBUG: filename returned to backup: '%s'\n", filename);
+    // fprintf(stderr, "DEBUG: filename returned to backup: '%s'\n", filename);
 
     /* 6. Build full output path. */
     char *output_path = join_path(dir, filename);
@@ -173,7 +179,7 @@ bool backup_run_interactive(void)
         free(filename);
         return false;
     }
-    fprintf(stderr, "DEBUG: output path: '%s'\n", output_path);
+    // fprintf(stderr, "DEBUG: output path: '%s'\n", output_path);
 
     /* 7. Run backup pipeline (now with fs_type). */
     bool ok = run_backup_pipeline(backend, device, fs_type, output_path);

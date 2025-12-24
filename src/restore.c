@@ -1,6 +1,7 @@
 #include "restore.h"
 #include "utils.h"
 #include "ui.h"
+#include "colors.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -61,7 +62,7 @@ static bool read_backend_from_metadata(const char *image_path,
     if (!found) {
         fprintf(stderr, "DEBUG: backend not found in metadata '%s'\n", meta_path);
     } else {
-        fprintf(stderr, "DEBUG: backend from metadata: '%s'\n", backend);
+        fprintf(stderr, YELLOW "Successfully determined backend from metadata: '%s'" RESET "\n\n", backend);
     }
 
     return found;
@@ -95,7 +96,11 @@ bool run_restore_pipeline(const char *backend,
     "Please monitor the terminal for partclone progress.\n"
     "This will overwrite all data on the selected partition.");
 
-    fprintf(stderr, "DEBUG: running elevated restore command: %s\n", pk_cmd);
+    fprintf(stderr,
+            YELLOW "Running elevated restore command:" RESET "\n"
+            "  " GREEN "%s" RESET "\n\n",
+            pk_cmd);
+
 
     int rc = system(pk_cmd);
     if (rc != 0) {
@@ -114,7 +119,7 @@ bool restore_run_interactive(void)
     if (!image_path) {
         return false;
     }
-    fprintf(stderr, "DEBUG: image selected: '%s'\n", image_path);
+    // fprintf(stderr, "DEBUG: image selected: '%s'\n", image_path);
 
     /* 2. Choose target partition. (reuses your existing mount-safety checks) */
     char *device = ui_choose_partition_with_title(
@@ -125,7 +130,7 @@ bool restore_run_interactive(void)
         free(image_path);
         return false;
     }
-    fprintf(stderr, "DEBUG: target partition selected: '%s'\n", device);
+    // fprintf(stderr, "DEBUG: target partition selected: '%s'\n", device);
 
     /* 3. Read backend from metadata JSON. */
     char backend[128] = {0};

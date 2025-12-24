@@ -1,4 +1,5 @@
 #include "utils.h"
+#include "colors.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,7 +24,7 @@ long long get_partition_size_bytes(const char *device)
     snprintf(cmd, sizeof(cmd),
              "lsblk -bno SIZE '%s' 2>/dev/null", device);
 
-    fprintf(stderr, "DEBUG: running size command: %s\n", cmd);
+    // fprintf(stderr, "DEBUG: running size command: %s\n", cmd);
 
     FILE *fp = popen(cmd, "r");
     if (!fp) {
@@ -46,7 +47,7 @@ long long get_partition_size_bytes(const char *device)
             *p = '\0';
     }
 
-    fprintf(stderr, "DEBUG: lsblk raw size string: '%s'\n", buf);
+    // fprintf(stderr, "DEBUG: lsblk raw size string: '%s'\n", buf);
 
     if (buf[0] == '\0') {
         fprintf(stderr, "DEBUG: lsblk returned empty size\n");
@@ -54,7 +55,7 @@ long long get_partition_size_bytes(const char *device)
     }
 
     long long val = atoll(buf);
-    fprintf(stderr, "DEBUG: parsed size: %lld bytes\n", val);
+    // fprintf(stderr, "DEBUG: parsed size: %lld bytes\n", val);
     return val;
 }
 
@@ -108,6 +109,8 @@ bool write_metadata(const char *image_path,
 
     long long part_size = get_partition_size_bytes(device);
 
+    printf(YELLOW "\nCalculating checksum...\n" RESET);
+
     char checksum[65] = {0};
     compute_sha256(image_path, checksum, sizeof(checksum));
 
@@ -128,6 +131,9 @@ bool write_metadata(const char *image_path,
     fprintf(fp, "}\n");
 
     fclose(fp);
+
+    printf(YELLOW "Done.\n" RESET);
+
     return true;
 }
 
@@ -189,7 +195,7 @@ bool is_program_available(const char *name)
 void check_core_dependencies(void)
 {
     bool ok = true;
-
+    printf("\033[33m\nChecking whether dependencies are installed...\033[37m\n\n");
     if (!is_program_available("zenity")) {
         fprintf(stderr,
                 "Error: 'zenity' is not installed or not in PATH.\n");
@@ -223,15 +229,16 @@ void check_core_dependencies(void)
         ok = false;
     }
 
-    if (!is_program_available("gzip")) {
+    if (!is_program_available("lz4")) {
         fprintf(stderr,
-                "Error: 'gzip' is not installed or not in PATH.\n");
+                "Error: 'lz4' is not installed or not in PATH.\n");
         ok = false;
     }
 
     if (!ok) {
         exit(EXIT_FAILURE);
     }
+    printf(YELLOW "\nAll dependencies installed.\n\n" RESET);
 }
 
 
