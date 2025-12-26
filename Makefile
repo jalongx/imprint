@@ -1,6 +1,7 @@
 CC      = gcc
 CFLAGS  = -Wall -Wextra -O2
-LDFLAGS =
+LDFLAGS = -lcrypto
+
 SRC_DIR = src
 OBJ_DIR = build
 
@@ -20,8 +21,8 @@ OBJS_COMMON   = $(SRCS_COMMON:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 OBJS_BACKUP   = $(SRCS_BACKUP:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 OBJS_RESTORE  = $(SRCS_RESTORE:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
-TARGET_BACKUP  = lghost-bkup
-TARGET_RESTORE = lghost-restore
+TARGET_BACKUP  = ghostxb
+TARGET_RESTORE = ghostxr
 
 .PHONY: all clean
 
