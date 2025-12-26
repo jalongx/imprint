@@ -9,9 +9,69 @@
 #include <time.h>
 #include <sys/stat.h>
 #include <stdbool.h>
-
+#include <ctype.h>
 #define OPENSSL_SUPPRESS_DEPRECATED
 #include <openssl/sha.h>
+
+static void get_parent_disk(const char *device, char *out, size_t out_len)
+{
+    /* NVMe: /dev/nvme0n1p6 → /dev/nvme0n1 */
+    const char *p = strstr(device, "nvme");
+    if (p) {
+        /* strip trailing 'p<partition>' */
+        const char *last_p = strrchr(device, 'p');
+        if (last_p && last_p > p) {
+            size_t len = (size_t)(last_p - device);
+            if (len >= out_len) len = out_len - 1;
+            memcpy(out, device, len);
+            out[len] = '\0';
+            return;
+        }
+    }
+
+    /* SATA: /dev/sda3 → /dev/sda */
+    size_t len = strlen(device);
+    if (len > 0 && isdigit((unsigned char)device[len - 1])) {
+
+        size_t i = len - 1;
+        while (i > 0 && isdigit((unsigned char)device[i])) {
+            i--;
+        }
+
+        /* i now points to the last non-digit character */
+        size_t plen = i + 1;
+        if (plen >= out_len)
+            plen = out_len - 1;
+
+        memcpy(out, device, plen);
+        out[plen] = '\0';
+        return;
+    }
+
+
+    /* fallback: copy as-is */
+    snprintf(out, out_len, "%s", device);
+}
+
+static bool get_partition_layout_json(const char *disk, char *out, size_t out_len)
+{
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd),
+             "lsblk -J -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT '%s'", disk);
+
+    FILE *fp = popen(cmd, "r");
+    if (!fp) return false;
+
+    size_t total = 0;
+    int c;
+    while ((c = fgetc(fp)) != EOF && total + 1 < out_len) {
+        out[total++] = (char)c;
+    }
+    out[total] = '\0';
+
+    pclose(fp);
+    return total > 0;
+}
 
 /* ---------------------------------------------------------
  * Get partition size in bytes using lsblk
@@ -124,20 +184,25 @@ bool write_metadata(const char *image_path,
     time_t now = time(NULL);
     long long part_size = get_partition_size_bytes(device);
 
-    // printf(YELLOW "\nCalculating checksum...\n" RESET);
-
     char checksum[65] = {0};
     if (!compute_sha256(image_path, checksum, sizeof(checksum))) {
         fprintf(stderr, RED "Failed to compute checksum!\n" RESET);
         return false;
     }
 
+    char parent_disk[128] = {0};
+    get_parent_disk(device, parent_disk, sizeof(parent_disk));
+
+    /* Partition layout (safe without root) */
+    char layout_json[8192] = "null";
+    get_partition_layout_json(parent_disk, layout_json, sizeof(layout_json));
+
     FILE *fp = fopen(meta_path, "w");
     if (!fp)
         return false;
 
     fprintf(fp, "{\n");
-    fprintf(fp, "  \"tool_version\": \"1.0\",\n");
+    fprintf(fp, "  \"tool_version\": \"1.1\",\n");
     fprintf(fp, "  \"timestamp\": %ld,\n", now);
     fprintf(fp, "  \"device\": \"%s\",\n", device);
     fprintf(fp, "  \"filesystem\": \"%s\",\n", fs_type);
@@ -145,12 +210,16 @@ bool write_metadata(const char *image_path,
     fprintf(fp, "  \"partition_size_bytes\": %lld,\n", part_size);
     fprintf(fp, "  \"image_filename\": \"%s\",\n", image_path);
     fprintf(fp, "  \"image_checksum_sha256\": \"%s\",\n", checksum);
+
+    fprintf(fp, "  \"source_disk\": \"%s\",\n", parent_disk);
+    fprintf(fp, "  \"source_partition_layout\": %s,\n", layout_json);
+
     fprintf(fp, "  \"notes\": \"\"\n");
     fprintf(fp, "}\n");
 
     fclose(fp);
 
-    printf(YELLOW "\n\nDone.\n" RESET);
+    printf(YELLOW "\nMetadata written successfully.\n" RESET);
     return true;
 }
 

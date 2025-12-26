@@ -1,1 +1,4 @@
 # ghostx is my reimagining of the Norton Ghost workflow that worked so well for me in the mid-1990's. The program is basically a wrapper for partclone with dialogues for selecting images, partitions and file names. It checks for some of the mistakes that might be catastrophic to a user, such as restoring to a partition of the wrong size or the wrong filesystem. It creates and checks the checksums of the image files to ensure that they haven't been modified.
+
+# Dependencies: zenity, partclone, lz4, pkexec
+
