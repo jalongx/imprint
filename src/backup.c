@@ -76,9 +76,9 @@ static char *join_path(const char *dir, const char *filename)
 
 /* Run partclone + gzip pipeline. */
 bool run_backup_pipeline(const char *backend,
-                          const char *device,
-                          const char *fs_type,
-                          const char *output_path)
+                         const char *device,
+                         const char *fs_type,
+                         const char *output_path)
 {
     if (!backend || !device || !output_path)
         return false;
@@ -103,18 +103,42 @@ bool run_backup_pipeline(const char *backend,
              pk_partclone,
              output_path);
 
-    ui_info("Backup will now start.\n\nPlease monitor the terminal for partclone progress.\nThis may take some time.");
+    ui_info("Backup will now start.\n\n"
+    "Please monitor the terminal for partclone progress.\n"
+    "This may take some time.");
 
     fprintf(stderr, YELLOW "Starting partclone...\n\n" RESET);
 
+    /* Run the pipeline */
     int rc = system(full_cmd);
-    if (rc != 0) {
-        ui_error("Backup failed. Please check the terminal output for details.");
+
+    /* Decode exit status */
+    int exit_code = -1;
+    if (rc != -1)
+        exit_code = WEXITSTATUS(rc);
+
+    /* Detect failure from partclone or lz4 */
+    if (rc == -1 || exit_code != 0) {
+
+        /* Delete partial/corrupted image */
+        unlink(output_path);
+
+        ui_error(
+            "Backup failed.\n\n"
+            "Partclone reported an error (often caused by a dirty NTFS volume).\n"
+            "No backup image was created.\n\n"
+            "If this is an NTFS partition, boot into Windows and run:\n"
+            "    chkdsk /f\n"
+            "Then try again."
+        );
+
         return false;
     }
 
+    /* Success */
     ui_info("Backup completed successfully.");
 
+    /* Write metadata only for valid backups */
     write_metadata(output_path, device, fs_type, backend);
 
     return true;

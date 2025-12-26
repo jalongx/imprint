@@ -57,7 +57,7 @@ static bool get_partition_layout_json(const char *disk, char *out, size_t out_le
 {
     char cmd[256];
     snprintf(cmd, sizeof(cmd),
-             "lsblk -J -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINT '%s'", disk);
+             "lsblk -J -o NAME,SIZE,FSTYPE,LABEL,TYPE,MOUNTPOINT '%s'", disk);
 
     FILE *fp = popen(cmd, "r");
     if (!fp) return false;
@@ -72,6 +72,7 @@ static bool get_partition_layout_json(const char *disk, char *out, size_t out_le
     pclose(fp);
     return total > 0;
 }
+
 
 /* ---------------------------------------------------------
  * Get partition size in bytes using lsblk
