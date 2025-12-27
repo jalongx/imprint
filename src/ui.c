@@ -1,5 +1,6 @@
 #include "ui.h"
 #include "utils.h"
+#include "config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -36,10 +37,19 @@ char *ui_choose_directory(void)
 {
     char cmd[2048];
 
-    snprintf(cmd, sizeof(cmd),
-             "zenity --file-selection "
-             "--directory "
-             "--title='Choose backup directory' 2>/dev/null");
+    if (gx_config.backup_dir[0] != '\0') {
+        snprintf(cmd, sizeof(cmd),
+                 "zenity --file-selection "
+                 "--directory "
+                 "--filename='%s/' "
+                 "--title='Choose backup directory' 2>/dev/null",
+                 gx_config.backup_dir);
+    } else {
+        snprintf(cmd, sizeof(cmd),
+                 "zenity --file-selection "
+                 "--directory "
+                 "--title='Choose backup directory' 2>/dev/null");
+    }
 
     FILE *fp = popen(cmd, "r");
     if (!fp)
@@ -52,11 +62,11 @@ char *ui_choose_directory(void)
     }
 
     pclose(fp);
-
     buf[strcspn(buf, "\r\n")] = '\0';
 
     return strdup(buf);
 }
+
 
 
 /*
@@ -224,11 +234,23 @@ char *ui_choose_image_file(void)
 {
     char cmd[2048];
 
-    snprintf(cmd, sizeof(cmd),
-             "zenity --file-selection "
-             "--title='Choose backup image file' "
-             "--file-filter='Image files | *.img *.img.gz *.gz' "
-             "2>/dev/null");
+    if (gx_config.backup_dir[0] != '\0') {
+        /* Start in the remembered backup directory */
+        snprintf(cmd, sizeof(cmd),
+                 "zenity --file-selection "
+                 "--filename='%s/' "
+                 "--title='Choose backup image file' "
+                 "--file-filter='Image files | *.img *.img.gz *.gz *.lz4' "
+                 "2>/dev/null",
+                 gx_config.backup_dir);
+    } else {
+        /* No remembered directory — use default Zenity behavior */
+        snprintf(cmd, sizeof(cmd),
+                 "zenity --file-selection "
+                 "--title='Choose backup image file' "
+                 "--file-filter='Image files | *.img *.img.gz *.gz *.lz4' "
+                 "2>/dev/null");
+    }
 
     FILE *fp = popen(cmd, "r");
     if (!fp)
@@ -249,6 +271,7 @@ char *ui_choose_image_file(void)
 
     return strdup(buf);
 }
+
 
 char *ui_choose_partition_with_title(const char *title, const char *text)
 {

@@ -2,6 +2,7 @@
 #include "utils.h"
 #include "ui.h"
 #include "colors.h"
+#include "config.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,7 +58,7 @@ static void build_default_filename(const char *device, const char *fs_type,
     }
     safe[j] = '\0';
 
-    snprintf(out, out_len, "%s_%s.img.gz",
+    snprintf(out, out_len, "%s_%s.img.lz4",
              safe,
              fs_type ? fs_type : "fs");
 }
@@ -83,23 +84,27 @@ bool run_backup_pipeline(const char *backend,
     if (!backend || !device || !output_path)
         return false;
 
-    /* Build the partclone command WITHOUT lz4 or redirection */
+    /* Build the partclone command (no compression here) */
     char partclone_cmd[1024];
     snprintf(partclone_cmd, sizeof(partclone_cmd),
              "%s -c -s '%s'",
              backend,
              device);
 
-    /* pkexec only wraps partclone */
+    /* pkexec wrapper */
     char pk_partclone[2048];
     snprintf(pk_partclone, sizeof(pk_partclone),
              "pkexec %s",
              partclone_cmd);
 
-    /* Full pipeline: root partclone → user lz4 → user output file */
+    /*
+     * IMPORTANT FIX:
+     * Use `set -o pipefail` so the pipeline returns the exit code
+     * of the FIRST failing command (partclone), not lz4.
+     */
     char full_cmd[4096];
     snprintf(full_cmd, sizeof(full_cmd),
-             "%s | lz4 -1 > '%s'",
+             "set -o pipefail; %s | lz4 -1 > '%s'",
              pk_partclone,
              output_path);
 
@@ -109,7 +114,7 @@ bool run_backup_pipeline(const char *backend,
 
     fprintf(stderr, YELLOW "Starting partclone...\n\n" RESET);
 
-    /* Run the pipeline */
+    /* Execute pipeline */
     int rc = system(full_cmd);
 
     /* Decode exit status */
@@ -117,10 +122,18 @@ bool run_backup_pipeline(const char *backend,
     if (rc != -1)
         exit_code = WEXITSTATUS(rc);
 
-    /* Detect failure from partclone or lz4 */
+    /* Debug output (optional but recommended) */
+    fprintf(stderr,
+            YELLOW "DEBUG: system() returned rc=%d, exit_code=%d\n" RESET,
+            rc, exit_code);
+
+    /*
+     * FAILURE HANDLING:
+     * If partclone fails, pipefail ensures exit_code != 0.
+     * We delete the partial image and show the NTFS warning.
+     */
     if (rc == -1 || exit_code != 0) {
 
-        /* Delete partial/corrupted image */
         unlink(output_path);
 
         ui_error(
@@ -134,9 +147,6 @@ bool run_backup_pipeline(const char *backend,
 
         return false;
     }
-
-    /* Success */
-    ui_info("Backup completed successfully.");
 
     /* Write metadata only for valid backups */
     write_metadata(output_path, device, fs_type, backend);
@@ -208,12 +218,21 @@ bool backup_run_interactive(void)
     /* 7. Run backup pipeline (now with fs_type). */
     bool ok = run_backup_pipeline(backend, device, fs_type, output_path);
 
+    if (ok) {
+        // Remember the directory for next time
+        strncpy(gx_config.backup_dir, dir, sizeof(gx_config.backup_dir)-1);
+        ghostx_config_save();
+
+        ui_info("Backup completed successfully.");
+    }
+
     free(dir);
     free(device);
     free(filename);
     free(output_path);
 
     return ok;
+
 }
 
 
