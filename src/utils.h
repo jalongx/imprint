@@ -40,4 +40,6 @@ bool compute_sha256(const char *filepath, char *out, size_t out_len);
 
 long long get_partition_size_bytes(const char *device);
 
+void gx_ensure_terminal(int argc, char **argv);
+
 #endif /* UTILS_H */

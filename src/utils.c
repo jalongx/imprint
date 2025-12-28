@@ -1,6 +1,8 @@
 #include "utils.h"
 #include "colors.h"
+#include "ui.h"
 
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,6 +14,93 @@
 #include <ctype.h>
 #define OPENSSL_SUPPRESS_DEPRECATED
 #include <openssl/sha.h>
+
+bool is_program_available(const char *name);
+
+bool is_program_available(const char *name)
+{
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "which %s >/dev/null 2>&1", name);
+    return (system(cmd) == 0);
+}
+
+void gx_ensure_terminal(int argc, char **argv)
+{
+    /* If already in a real terminal, do nothing */
+    if (isatty(STDOUT_FILENO)) {
+        return;
+    }
+
+    /* Terminal emulators to try */
+    const char *terms[] = {
+        "konsole",
+        "gnome-terminal",
+        "xfce4-terminal",
+        "x-terminal-emulator",
+        "kitty",
+        "alacritty",
+        "xterm",
+        NULL
+    };
+
+    for (int i = 0; terms[i]; i++) {
+        if (is_program_available(terms[i])) {
+
+            char cmd[4096];
+
+            if (strcmp(terms[i], "konsole") == 0) {
+                snprintf(cmd, sizeof(cmd),
+                         "konsole --hold -e \"%s", argv[0]);
+            }
+            else if (strcmp(terms[i], "gnome-terminal") == 0) {
+                snprintf(cmd, sizeof(cmd),
+                         "gnome-terminal -- bash -c \"%s", argv[0]);
+            }
+            else if (strcmp(terms[i], "xfce4-terminal") == 0) {
+                snprintf(cmd, sizeof(cmd),
+                         "xfce4-terminal --hold -e \"%s", argv[0]);
+            }
+            else if (strcmp(terms[i], "x-terminal-emulator") == 0) {
+                snprintf(cmd, sizeof(cmd),
+                         "x-terminal-emulator -e \"%s", argv[0]);
+            }
+            else if (strcmp(terms[i], "kitty") == 0) {
+                snprintf(cmd, sizeof(cmd),
+                         "kitty \"%s", argv[0]);
+            }
+            else if (strcmp(terms[i], "alacritty") == 0) {
+                snprintf(cmd, sizeof(cmd),
+                         "alacritty -e \"%s", argv[0]);
+            }
+            else {
+                snprintf(cmd, sizeof(cmd),
+                         "xterm -hold -e \"%s", argv[0]);
+            }
+
+            /* Append arguments */
+            for (int j = 1; j < argc; j++) {
+                strcat(cmd, " ");
+                strcat(cmd, argv[j]);
+            }
+
+            strcat(cmd, "\"");
+
+            /* XFCE fix: fork, child launches terminal, parent waits then exits */
+            pid_t pid = fork();
+            if (pid == 0) {
+                execl("/bin/sh", "sh", "-c", cmd, (char *)NULL);
+                _exit(1);
+            }
+
+            waitpid(pid, NULL, 0);
+            exit(0);
+        }
+    }
+
+    fprintf(stderr,
+            "GhostX needs a terminal to display progress, but no terminal emulator was found.\n");
+    exit(1);
+}
 
 static void get_parent_disk(const char *device, char *out, size_t out_len)
 {
@@ -251,15 +340,6 @@ int run_command(char *const argv[])
         return WEXITSTATUS(status);
 
     return -1;
-}
-
-/* ---------------------------------------------------------
- * Check if a program exists in PATH
- * --------------------------------------------------------- */
-bool is_program_available(const char *name)
-{
-    char *argv[] = { "which", (char *)name, NULL };
-    return (run_command(argv) == 0);
 }
 
 /* ---------------------------------------------------------

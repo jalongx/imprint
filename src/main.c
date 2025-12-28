@@ -6,8 +6,10 @@
 
 #include "config.h"
 
-int main(void)
+int main(int argc, char **argv)
 {
+    gx_ensure_terminal(argc, argv);
+
     ghostx_config_load();
     check_core_dependencies();
 
