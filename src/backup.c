@@ -108,9 +108,9 @@ bool run_backup_pipeline(const char *backend,
              pk_partclone,
              output_path);
 
-    ui_info("Backup will now start.\n\n"
-    "Please monitor the terminal for partclone progress.\n"
-    "This may take some time.");
+    // ui_info("Backup will now start.\n\n"
+    // "Please monitor the terminal for partclone progress.\n"
+    // "This may take some time.");
 
     fprintf(stderr, YELLOW "Starting partclone...\n\n" RESET);
 

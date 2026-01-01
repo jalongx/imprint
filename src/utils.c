@@ -50,7 +50,7 @@ void gx_ensure_terminal(int argc, char **argv)
 
             if (strcmp(terms[i], "konsole") == 0) {
                 snprintf(cmd, sizeof(cmd),
-                         "konsole --hold -e \"%s", argv[0]);
+                         "konsole -e \"%s", argv[0]);
             }
             else if (strcmp(terms[i], "gnome-terminal") == 0) {
                 snprintf(cmd, sizeof(cmd),
@@ -58,7 +58,7 @@ void gx_ensure_terminal(int argc, char **argv)
             }
             else if (strcmp(terms[i], "xfce4-terminal") == 0) {
                 snprintf(cmd, sizeof(cmd),
-                         "xfce4-terminal --hold -e \"%s", argv[0]);
+                         "xfce4-terminal -e \"%s", argv[0]);
             }
             else if (strcmp(terms[i], "x-terminal-emulator") == 0) {
                 snprintf(cmd, sizeof(cmd),
@@ -349,7 +349,7 @@ void check_core_dependencies(void)
 {
     bool ok = true;
 
-    printf(YELLOW "Checking whether dependencies are installed...\n\n" RESET);
+    printf(YELLOW "Checking whether dependencies are installed...\n" RESET);
 
     if (!is_program_available("zenity")) {
         fprintf(stderr, "Error: 'zenity' is not installed.\n");
