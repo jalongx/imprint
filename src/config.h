@@ -3,19 +3,18 @@
 
 #include <stdbool.h>
 
-#define GHOSTX_VERSION   "0.80.00"
+#define GHOSTX_VERSION    "0.90.00"
 #define GHOSTX_BUILD_DATE __DATE__
 
 typedef struct {
     char backup_dir[1024];
     char compression[32];
+    int  chunk_size_mb;   // 0 = disabled, >0 = chunk size in MB
 } GhostXConfig;
 
 extern GhostXConfig gx_config;
 
 void ghostx_config_load(void);
 void ghostx_config_save(void);
-
-
 
 #endif

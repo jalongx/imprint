@@ -272,9 +272,6 @@ bool compute_sha256(const char *filepath, char *out, size_t out_len)
 /* ---------------------------------------------------------
  * Write metadata JSON
  * --------------------------------------------------------- */
-/* ---------------------------------------------------------
- * Write metadata JSON
- * --------------------------------------------------------- */
 bool write_metadata(const char *image_path,
                     const char *device,
                     const char *fs_type,
@@ -302,7 +299,6 @@ bool write_metadata(const char *image_path,
 
     FILE *cfp = fopen(checksum_file, "r");
     if (cfp) {
-        /* Read first field (hash) from the sha256sum output */
         if (fscanf(cfp, "%64s", checksum) == 1) {
             have_checksum = true;
         }
@@ -325,12 +321,16 @@ bool write_metadata(const char *image_path,
     char layout_json[8192] = "null";
     get_partition_layout_json(parent_disk, layout_json, sizeof(layout_json));
 
+    /* Chunking flags from config */
+    bool chunked = (gx_config.chunk_size_mb > 0);
+    int  chunk_size_mb = gx_config.chunk_size_mb;
+
     FILE *fp = fopen(meta_path, "w");
     if (!fp)
         return false;
 
     fprintf(fp, "{\n");
-    fprintf(fp, "  \"tool_version\": \"1.1\",\n");
+    fprintf(fp, "  \"tool_version\": \"1.2\",\n");
     fprintf(fp, "  \"timestamp\": %ld,\n", now);
     fprintf(fp, "  \"device\": \"%s\",\n", device);
     fprintf(fp, "  \"filesystem\": \"%s\",\n", fs_type);
@@ -339,6 +339,8 @@ bool write_metadata(const char *image_path,
     fprintf(fp, "  \"partition_size_bytes\": %lld,\n", part_size);
     fprintf(fp, "  \"image_filename\": \"%s\",\n", image_path);
     fprintf(fp, "  \"image_checksum_sha256\": \"%s\",\n", checksum);
+    fprintf(fp, "  \"chunked\": %s,\n", chunked ? "true" : "false");
+    fprintf(fp, "  \"chunk_size_mb\": %d,\n", chunk_size_mb);
     fprintf(fp, "  \"source_disk\": \"%s\",\n", parent_disk);
     fprintf(fp, "  \"source_partition_layout\": %s,\n", layout_json);
     fprintf(fp, "  \"notes\": \"\"\n");

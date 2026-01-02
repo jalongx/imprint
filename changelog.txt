@@ -46,3 +46,6 @@ v0.80.0, 2-Jan-2026 - Added tee support to backup pipeline for checksum computat
 - Restore no longer computes thje checksum before restoring an image.
 - Metadata files are left in the image file directory for the manual validation of the checksum.
 - Backup and restore processes are now twice as fast.
+
+v0.90.0, 2-Jan-2026 - Added ability to backup and restore image file in user-defined chunks.
+- User can define the chunk size in the config file in ~/.config/imprint

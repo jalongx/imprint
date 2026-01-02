@@ -159,7 +159,6 @@ bool run_backup_pipeline(const char *backend,
 
     /* -------------------------------
      * 2. Start sha256sum in background
-     *    sha256sum < fifo > output.sha256
      * ------------------------------- */
     pid_t sha_pid = fork();
     if (sha_pid < 0) {
@@ -183,19 +182,38 @@ bool run_backup_pipeline(const char *backend,
     }
 
     /*
-     * 3. Build the main pipeline with tee:
+     * 3. Build the main pipeline.
      *
-     *    pk_partclone | tee 'fifo' | comp_cmd > 'output_path'
+     * Normal:
+     *   pk_partclone | tee fifo | comp_cmd > output_path
      *
-     *    - set -o pipefail ensures we see partclone failures.
+     * Chunked:
+     *   pk_partclone | tee fifo | comp_cmd | split -b <MB>M -d -a 3 - output_path.
+     *
+     * - set -o pipefail ensures we see partclone failures.
      */
     char full_cmd[4096];
-    snprintf(full_cmd, sizeof(full_cmd),
-             "set -o pipefail; %s | tee '%s' | %s > '%s'",
-             pk_partclone,
-             checksum_fifo,
-             comp_cmd,
-             output_path);
+
+    if (gx_config.chunk_size_mb > 0) {
+        /* Chunked backup pipeline */
+        snprintf(full_cmd, sizeof(full_cmd),
+                 "set -o pipefail; "
+                 "%s | tee '%s' | %s | split -b %dM -d -a 3 - '%s.'",
+                 pk_partclone,
+                 checksum_fifo,
+                 comp_cmd,
+                 gx_config.chunk_size_mb,
+                 output_path);
+    } else {
+        /* Normal single-file backup */
+        snprintf(full_cmd, sizeof(full_cmd),
+                 "set -o pipefail; "
+                 "%s | tee '%s' | %s > '%s'",
+                 pk_partclone,
+                 checksum_fifo,
+                 comp_cmd,
+                 output_path);
+    }
 
     fprintf(stderr, YELLOW "Starting partclone with streaming checksum...\n\n" RESET);
 
@@ -250,6 +268,7 @@ bool run_backup_pipeline(const char *backend,
 
     return true;
 }
+
 
 
 bool backup_run_interactive(void)

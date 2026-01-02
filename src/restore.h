@@ -27,6 +27,7 @@ bool restore_run_interactive(void);
 bool run_restore_pipeline(const char *backend,
                           const char *image_path,
                           const char *device,
-                          const char *compression);
+                          const char *compression,
+                          bool chunked);
 
 #endif /* RESTORE_H */

@@ -51,6 +51,11 @@ static void parse_config_line(char *line)
         gx_config.compression[sizeof(gx_config.compression) - 1] = '\0';
     }
 
+    if (strcmp(key, "chunk_size_mb") == 0) {
+        gx_config.chunk_size_mb = atoi(value);
+        if (gx_config.chunk_size_mb < 0)
+            gx_config.chunk_size_mb = 0;   // safety
+    }
 }
 
 /* ---------------------------------------------------------
@@ -127,6 +132,8 @@ void ghostx_config_load(void)
 {
     memset(&gx_config, 0, sizeof(gx_config));
 
+    gx_config.chunk_size_mb = 0;   // default: no chunking
+
     /* Default compression */
     strncpy(gx_config.compression, "lz4", sizeof(gx_config.compression) - 1);
 
@@ -176,17 +183,17 @@ void ghostx_config_save(void)
 
     fprintf(fp,
             "# ------------------------------------------------------------\n"
-            "# GhostX User Preferences\n"
+            "# Imprint User Preferences\n"
             "# ------------------------------------------------------------\n"
-            "# These settings control how GhostX behaves during backup.\n"
-            "# You may edit them manually. Invalid values fall back to safe defaults.\n"
-            "#\n"
             "# compression=\n"
-            "#   lz4   - extremely fast, moderate compression (recommended for speed)\n"
-            "#   zstd  - fast, strong compression (recommended balance)\n"
+            "#   lz4   - extremely fast, moderate compression (recommended)\n"
+            "#   zstd  - fast, strong compression\n"
             "#   gzip  - slow, legacy compatibility only\n"
             "#\n"
-            "# Additional options may be added in future versions.\n"
+            "# chunk_size_mb=\n"
+            "#   0     - disabled (single large image file)\n"
+            "#   >0    - split compressed output into chunks of this size (MB)\n"
+            "#           Example: 2048 = 2GB chunks\n"
             "# ------------------------------------------------------------\n\n"
     );
 
@@ -196,6 +203,7 @@ void ghostx_config_save(void)
     if (gx_config.compression[0] != '\0')
         fprintf(fp, "compression=%s\n", gx_config.compression);
 
+    fprintf(fp, "chunk_size_mb=%d\n", gx_config.chunk_size_mb);
 
     fclose(fp);
 }

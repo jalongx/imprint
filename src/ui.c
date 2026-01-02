@@ -234,22 +234,38 @@ char *ui_choose_image_file(void)
 {
     char cmd[2048];
 
+    /*
+     * We want to show:
+     *   - normal single-file images
+     *   - ONLY the first chunk of a chunked series (*.000)
+     *
+     * Zenity cannot express complex logic, but we can simply
+     * include *.000 in the filter and exclude *.001+.  Those
+     * will not match any filter and will be hidden.
+     */
+
+    const char *filter =
+    "--file-filter='Image files | "
+    "*.img.lz4 *.img.gz *.img.zst "
+    "*.lz4 *.gz *.zst "
+    "*.000'";
+
     if (gx_config.backup_dir[0] != '\0') {
-        /* Start in the remembered backup directory */
         snprintf(cmd, sizeof(cmd),
                  "zenity --file-selection "
                  "--filename='%s/' "
                  "--title='Choose backup image file' "
-                 "--file-filter='Image files | *.img.lz4 *.img.gz *.img.zst *.lz4 *.gz *.zst' "
+                 "%s "
                  "2>/dev/null",
-                 gx_config.backup_dir);
+                 gx_config.backup_dir,
+                 filter);
     } else {
-        /* No remembered directory — use default Zenity behavior */
         snprintf(cmd, sizeof(cmd),
                  "zenity --file-selection "
                  "--title='Choose backup image file' "
-                 "--file-filter='Image files | *.img.lz4 *.img.gz *.img.zst *.lz4 *.gz *.zst' "
-                 "2>/dev/null");
+                 "%s "
+                 "2>/dev/null",
+                 filter);
     }
 
     FILE *fp = popen(cmd, "r");
