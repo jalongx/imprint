@@ -43,5 +43,8 @@ Why Imprint?
 Imprint focuses on predictability, transparency, and safety.
 If you liked how Ghost “just worked,” Imprint brings that same reliability to modern Linux systems — with better integrity checks, better metadata, and a cleaner UI.
 
-<img width="1073" height="1066" alt="imprint_bkup_1" src="https://github.com/user-attachments/assets/550f4ac0-7354-4c5b-9a62-437d2f1d62fe" />
+Backup Dialog
+<img width="926" height="1362" alt="imprint_bkup_1" src="https://github.com/user-attachments/assets/632d0e30-f302-4150-b605-3ccf0f892a98" />
+
+Restore Dialog
 <img width="1165" height="1303" alt="imprint_restore_1" src="https://github.com/user-attachments/assets/19e9921a-3bf1-4c9f-b621-8d2313f78f6a" />
