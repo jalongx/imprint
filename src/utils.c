@@ -1,6 +1,7 @@
 #include "utils.h"
 #include "colors.h"
 #include "ui.h"
+#include "config.h"
 
 #include <stdbool.h>
 #include <stdio.h>
@@ -15,7 +16,18 @@
 #define OPENSSL_SUPPRESS_DEPRECATED
 #include <openssl/sha.h>
 
-bool is_program_available(const char *name);
+void ghostx_print_banner(const char *program_name)
+{
+    const char *line = "============================================================";
+
+    printf(GREEN "\n%s\n" RESET, line);
+    printf(GREEN "%s v%s, %s\n" RESET,
+           program_name,
+           GHOSTX_VERSION,
+           GHOSTX_BUILD_DATE);
+    printf(GREEN "%s\n\n" RESET, line);
+}
+
 
 bool is_program_available(const char *name)
 {
@@ -263,8 +275,9 @@ bool compute_sha256(const char *filepath, char *out, size_t out_len)
 bool write_metadata(const char *image_path,
                     const char *device,
                     const char *fs_type,
-                    const char *backend)
-{
+                    const char *backend,
+                    const char *compression)
+    {
     if (!image_path || !device || !fs_type || !backend)
         return false;
 
@@ -297,13 +310,15 @@ bool write_metadata(const char *image_path,
     fprintf(fp, "  \"device\": \"%s\",\n", device);
     fprintf(fp, "  \"filesystem\": \"%s\",\n", fs_type);
     fprintf(fp, "  \"backend\": \"%s\",\n", backend);
+
+    /* New field: compression method (currently fixed to lz4) */
+    fprintf(fp, "  \"compression\": \"%s\",\n", compression);
+
     fprintf(fp, "  \"partition_size_bytes\": %lld,\n", part_size);
     fprintf(fp, "  \"image_filename\": \"%s\",\n", image_path);
     fprintf(fp, "  \"image_checksum_sha256\": \"%s\",\n", checksum);
-
     fprintf(fp, "  \"source_disk\": \"%s\",\n", parent_disk);
     fprintf(fp, "  \"source_partition_layout\": %s,\n", layout_json);
-
     fprintf(fp, "  \"notes\": \"\"\n");
     fprintf(fp, "}\n");
 
@@ -312,6 +327,7 @@ bool write_metadata(const char *image_path,
     printf(YELLOW "\nMetadata written successfully.\n" RESET);
     return true;
 }
+
 
 /* ---------------------------------------------------------
  * Run a command via fork/exec
@@ -383,6 +399,16 @@ void check_core_dependencies(void)
 
     if (!is_program_available("lz4")) {
         fprintf(stderr, "Error: 'lz4' is not installed.\n");
+        ok = false;
+    }
+
+    if (!is_program_available("gzip")) {
+        fprintf(stderr, "Error: 'gzip' is not installed.\n");
+        ok = false;
+    }
+
+    if (!is_program_available("zstd")) {
+        fprintf(stderr, "Error: 'zstd' is not installed.\n");
         ok = false;
     }
 

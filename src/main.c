@@ -10,6 +10,8 @@ int main(int argc, char **argv)
 {
     gx_ensure_terminal(argc, argv);
 
+    ghostx_print_banner("Imprint Disk Imager");
+
     ghostx_config_load();
     check_core_dependencies();
 

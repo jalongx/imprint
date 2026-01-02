@@ -240,7 +240,7 @@ char *ui_choose_image_file(void)
                  "zenity --file-selection "
                  "--filename='%s/' "
                  "--title='Choose backup image file' "
-                 "--file-filter='Image files | *.img *.img.gz *.gz *.lz4' "
+                 "--file-filter='Image files | *.img.lz4 *.img.gz *.img.zst *.lz4 *.gz *.zst' "
                  "2>/dev/null",
                  gx_config.backup_dir);
     } else {
@@ -248,7 +248,7 @@ char *ui_choose_image_file(void)
         snprintf(cmd, sizeof(cmd),
                  "zenity --file-selection "
                  "--title='Choose backup image file' "
-                 "--file-filter='Image files | *.img *.img.gz *.gz *.lz4' "
+                 "--file-filter='Image files | *.img.lz4 *.img.gz *.img.zst *.lz4 *.gz *.zst' "
                  "2>/dev/null");
     }
 

@@ -9,6 +9,37 @@
 #include <string.h>
 #include <unistd.h>
 
+/* Map compression string to compressor command */
+static const char *get_compressor_cmd(const char *comp)
+{
+    if (!comp)
+        return "lz4 -1";
+
+    if (strcmp(comp, "gzip") == 0)
+        return "gzip -3";
+
+    if (strcmp(comp, "zstd") == 0)
+        return "zstd -6";
+
+    return "lz4 -1";  /* default */
+}
+
+/* Map compression string to filename extension */
+static const char *get_compression_ext(const char *comp)
+{
+    if (!comp)
+        return "lz4";
+
+    if (strcmp(comp, "gzip") == 0)
+        return "gz";
+
+    if (strcmp(comp, "zstd") == 0)
+        return "zst";
+
+    return "lz4";  /* default */
+}
+
+
 /* Map filesystem type to partclone backend. */
 static const char *partclone_backend_for_fs(const char *fs_type)
 {
@@ -39,7 +70,7 @@ static const char *partclone_backend_for_fs(const char *fs_type)
 }
 
 
-/* Build a default filename based on device and filesystem. */
+/* Build a default filename based on device, filesystem, and compression. */
 static void build_default_filename(const char *device, const char *fs_type,
                                    char *out, size_t out_len)
 {
@@ -58,10 +89,15 @@ static void build_default_filename(const char *device, const char *fs_type,
     }
     safe[j] = '\0';
 
-    snprintf(out, out_len, "%s_%s.img.lz4",
+    /* Determine extension based on config */
+    const char *ext = get_compression_ext(gx_config.compression);
+
+    snprintf(out, out_len, "%s_%s.img.%s",
              safe,
-             fs_type ? fs_type : "fs");
+             fs_type ? fs_type : "fs",
+             ext);
 }
+
 
 /* Build full path: dir + "/" + filename. Caller must free. */
 static char *join_path(const char *dir, const char *filename)
@@ -84,33 +120,37 @@ bool run_backup_pipeline(const char *backend,
     if (!backend || !device || !output_path)
         return false;
 
-    /* Build the partclone command (no compression here) */
+    /* Determine compressor command based on config */
+    const char *comp_cmd = get_compressor_cmd(gx_config.compression);
+
+    fprintf(stderr,
+            YELLOW "Using compressor: %s\n" RESET,
+            comp_cmd);
+
+    /* Build the partclone command */
     char partclone_cmd[1024];
     snprintf(partclone_cmd, sizeof(partclone_cmd),
              "%s -c -s '%s'",
              backend,
              device);
 
-    /* pkexec wrapper */
+    /* pkexec wrapper for partclone ONLY */
     char pk_partclone[2048];
     snprintf(pk_partclone, sizeof(pk_partclone),
              "pkexec %s",
              partclone_cmd);
 
     /*
-     * IMPORTANT FIX:
+     * IMPORTANT:
      * Use `set -o pipefail` so the pipeline returns the exit code
-     * of the FIRST failing command (partclone), not lz4.
+     * of the FIRST failing command (partclone), not the compressor.
      */
     char full_cmd[4096];
     snprintf(full_cmd, sizeof(full_cmd),
-             "set -o pipefail; %s | lz4 -1 > '%s'",
+             "set -o pipefail; %s | %s > '%s'",
              pk_partclone,
+             comp_cmd,
              output_path);
-
-    // ui_info("Backup will now start.\n\n"
-    // "Please monitor the terminal for partclone progress.\n"
-    // "This may take some time.");
 
     fprintf(stderr, YELLOW "Starting partclone...\n\n" RESET);
 
@@ -122,7 +162,6 @@ bool run_backup_pipeline(const char *backend,
     if (rc != -1)
         exit_code = WEXITSTATUS(rc);
 
-    /* Debug output (optional but recommended) */
     fprintf(stderr,
             YELLOW "DEBUG: system() returned rc=%d, exit_code=%d\n" RESET,
             rc, exit_code);
@@ -149,10 +188,11 @@ bool run_backup_pipeline(const char *backend,
     }
 
     /* Write metadata only for valid backups */
-    write_metadata(output_path, device, fs_type, backend);
+    write_metadata(output_path, device, fs_type, backend, gx_config.compression);
 
     return true;
 }
+
 
 
 bool backup_run_interactive(void)

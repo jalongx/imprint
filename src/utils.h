@@ -34,12 +34,16 @@ bool get_fs_type(const char *device, char *fs_type, int fs_type_len);
 bool write_metadata(const char *image_path,
                     const char *device,
                     const char *fs_type,
-                    const char *backend);
+                    const char *backend,
+                    const char *compression);
 
 bool compute_sha256(const char *filepath, char *out, size_t out_len);
 
 long long get_partition_size_bytes(const char *device);
 
 void gx_ensure_terminal(int argc, char **argv);
+
+void ghostx_print_banner(const char *program_name);
+
 
 #endif /* UTILS_H */

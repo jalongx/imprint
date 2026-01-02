@@ -26,6 +26,7 @@ bool restore_run_interactive(void);
  */
 bool run_restore_pipeline(const char *backend,
                           const char *image_path,
-                          const char *device);
+                          const char *device,
+                          const char *compression);
 
 #endif /* RESTORE_H */

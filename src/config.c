@@ -45,6 +45,12 @@ static void parse_config_line(char *line)
         strncpy(gx_config.backup_dir, value, sizeof(gx_config.backup_dir) - 1);
         gx_config.backup_dir[sizeof(gx_config.backup_dir) - 1] = '\0';
     }
+
+    if (strcmp(key, "compression") == 0) {
+        strncpy(gx_config.compression, value, sizeof(gx_config.compression) - 1);
+        gx_config.compression[sizeof(gx_config.compression) - 1] = '\0';
+    }
+
 }
 
 /* ---------------------------------------------------------
@@ -121,6 +127,9 @@ void ghostx_config_load(void)
 {
     memset(&gx_config, 0, sizeof(gx_config));
 
+    /* Default compression */
+    strncpy(gx_config.compression, "lz4", sizeof(gx_config.compression) - 1);
+
     char dir[2048];
     get_config_dir(dir, sizeof(dir));
 
@@ -165,10 +174,28 @@ void ghostx_config_save(void)
         return; /* read‑only FS or permission issue — safe to ignore */
     }
 
-    fprintf(fp, "# GhostX user preferences\n");
+    fprintf(fp,
+            "# ------------------------------------------------------------\n"
+            "# GhostX User Preferences\n"
+            "# ------------------------------------------------------------\n"
+            "# These settings control how GhostX behaves during backup.\n"
+            "# You may edit them manually. Invalid values fall back to safe defaults.\n"
+            "#\n"
+            "# compression=\n"
+            "#   lz4   - extremely fast, moderate compression (recommended for speed)\n"
+            "#   zstd  - fast, strong compression (recommended balance)\n"
+            "#   gzip  - slow, legacy compatibility only\n"
+            "#\n"
+            "# Additional options may be added in future versions.\n"
+            "# ------------------------------------------------------------\n\n"
+    );
 
     if (gx_config.backup_dir[0] != '\0')
         fprintf(fp, "backup_dir=%s\n", gx_config.backup_dir);
+
+    if (gx_config.compression[0] != '\0')
+        fprintf(fp, "compression=%s\n", gx_config.compression);
+
 
     fclose(fp);
 }
