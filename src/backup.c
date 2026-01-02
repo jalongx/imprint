@@ -8,6 +8,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 
 /* Map compression string to compressor command */
 static const char *get_compressor_cmd(const char *comp)
@@ -112,6 +115,7 @@ static char *join_path(const char *dir, const char *filename)
 }
 
 /* Run partclone + gzip pipeline. */
+/* Run partclone + compressor + streaming checksum pipeline. */
 bool run_backup_pipeline(const char *backend,
                          const char *device,
                          const char *fs_type,
@@ -140,40 +144,94 @@ bool run_backup_pipeline(const char *backend,
              "pkexec %s",
              partclone_cmd);
 
+    /* -------------------------------
+     * 1. Create FIFO for checksum
+     * ------------------------------- */
+    char checksum_fifo[1024];
+    snprintf(checksum_fifo, sizeof(checksum_fifo),
+             "%s.sha256pipe", output_path);
+
+    if (mkfifo(checksum_fifo, 0600) != 0) {
+        perror("mkfifo (checksum fifo)");
+        ui_error("Failed to create checksum FIFO.");
+        return false;
+    }
+
+    /* -------------------------------
+     * 2. Start sha256sum in background
+     *    sha256sum < fifo > output.sha256
+     * ------------------------------- */
+    pid_t sha_pid = fork();
+    if (sha_pid < 0) {
+        perror("fork (sha256sum)");
+        unlink(checksum_fifo);
+        ui_error("Failed to start checksum process.");
+        return false;
+    }
+
+    if (sha_pid == 0) {
+        /* Child: run sha256sum streaming from FIFO */
+        char sha_cmd[2048];
+        snprintf(sha_cmd, sizeof(sha_cmd),
+                 "sha256sum < '%s' > '%s.sha256'",
+                 checksum_fifo,
+                 output_path);
+
+        execl("/bin/sh", "sh", "-c", sha_cmd, (char *)NULL);
+        perror("execl (sha256sum)");
+        _exit(127);
+    }
+
     /*
-     * IMPORTANT:
-     * Use `set -o pipefail` so the pipeline returns the exit code
-     * of the FIRST failing command (partclone), not the compressor.
+     * 3. Build the main pipeline with tee:
+     *
+     *    pk_partclone | tee 'fifo' | comp_cmd > 'output_path'
+     *
+     *    - set -o pipefail ensures we see partclone failures.
      */
     char full_cmd[4096];
     snprintf(full_cmd, sizeof(full_cmd),
-             "set -o pipefail; %s | %s > '%s'",
+             "set -o pipefail; %s | tee '%s' | %s > '%s'",
              pk_partclone,
+             checksum_fifo,
              comp_cmd,
              output_path);
 
-    fprintf(stderr, YELLOW "Starting partclone...\n\n" RESET);
+    fprintf(stderr, YELLOW "Starting partclone with streaming checksum...\n\n" RESET);
 
-    /* Execute pipeline */
+    /* 4. Execute pipeline */
     int rc = system(full_cmd);
 
-    /* Decode exit status */
+    /* 5. Close FIFO (removes name; readers still complete) */
+    unlink(checksum_fifo);
+
+    /* 6. Wait for sha256sum to finish */
+    int sha_status = 0;
+    if (waitpid(sha_pid, &sha_status, 0) < 0) {
+        perror("waitpid (sha256sum)");
+    }
+
+    /* Decode exit status of the pipeline */
     int exit_code = -1;
     if (rc != -1)
         exit_code = WEXITSTATUS(rc);
 
     fprintf(stderr,
-            YELLOW "DEBUG: system() returned rc=%d, exit_code=%d\n" RESET,
-            rc, exit_code);
+            YELLOW "DEBUG: system() returned rc=%d, exit_code=%d, sha_status=%d\n" RESET,
+            rc, exit_code, sha_status);
 
     /*
      * FAILURE HANDLING:
-     * If partclone fails, pipefail ensures exit_code != 0.
-     * We delete the partial image and show the NTFS warning.
+     * If partclone or compressor fails, pipefail ensures exit_code != 0.
+     * We delete the partial image and any checksum file, and show the NTFS warning.
      */
     if (rc == -1 || exit_code != 0) {
 
         unlink(output_path);
+
+        char sha_file[1024];
+        snprintf(sha_file, sizeof(sha_file), "%s.sha256", output_path);
+        unlink(sha_file);
 
         ui_error(
             "Backup failed.\n\n"
@@ -192,7 +250,6 @@ bool run_backup_pipeline(const char *backend,
 
     return true;
 }
-
 
 
 bool backup_run_interactive(void)

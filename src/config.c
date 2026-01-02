@@ -63,31 +63,30 @@ static void get_config_dir(char *out, size_t out_len)
     const char *home = getenv("HOME");
 
     if (xdg && xdg[0] != '\0') {
-        /* xdg + "/ghostx" */
+        /* xdg + "/imprint" */
         size_t xlen = strlen(xdg);
-        const char suffix[] = "/ghostx";
+        const char suffix[] = "/imprint";
         size_t slen = sizeof(suffix) - 1;
 
         if (xlen + slen + 1 > out_len) {
-            /* Fallback if somehow too long */
-            strncpy(out, "/tmp/ghostx", out_len - 1);
+            strncpy(out, "/tmp/imprint", out_len - 1);
             out[out_len - 1] = '\0';
             return;
         }
 
         memcpy(out, xdg, xlen);
-        memcpy(out + xlen, suffix, slen + 1); /* includes '\0' */
+        memcpy(out + xlen, suffix, slen + 1);
         return;
     }
 
     if (home && home[0] != '\0') {
-        /* home + "/.config/ghostx" */
+        /* home + "/.config/imprint" */
         size_t hlen = strlen(home);
-        const char suffix[] = "/.config/ghostx";
+        const char suffix[] = "/.config/imprint";
         size_t slen = sizeof(suffix) - 1;
 
         if (hlen + slen + 1 > out_len) {
-            strncpy(out, "/tmp/ghostx", out_len - 1);
+            strncpy(out, "/tmp/imprint", out_len - 1);
             out[out_len - 1] = '\0';
             return;
         }
@@ -98,9 +97,10 @@ static void get_config_dir(char *out, size_t out_len)
     }
 
     /* Last‑ditch fallback */
-    strncpy(out, "/tmp/ghostx", out_len - 1);
+    strncpy(out, "/tmp/imprint", out_len - 1);
     out[out_len - 1] = '\0';
 }
+
 
 /* ---------------------------------------------------------
  * Build full path: <dir> + "/config"

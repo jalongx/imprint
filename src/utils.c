@@ -272,12 +272,15 @@ bool compute_sha256(const char *filepath, char *out, size_t out_len)
 /* ---------------------------------------------------------
  * Write metadata JSON
  * --------------------------------------------------------- */
+/* ---------------------------------------------------------
+ * Write metadata JSON
+ * --------------------------------------------------------- */
 bool write_metadata(const char *image_path,
                     const char *device,
                     const char *fs_type,
                     const char *backend,
                     const char *compression)
-    {
+{
     if (!image_path || !device || !fs_type || !backend)
         return false;
 
@@ -287,10 +290,32 @@ bool write_metadata(const char *image_path,
     time_t now = time(NULL);
     long long part_size = get_partition_size_bytes(device);
 
+    /* -----------------------------------------------------------------
+     * Read checksum from the streamed sha256 output file: <image>.sha256
+     * Format: "<hex>  filename"
+     * ----------------------------------------------------------------- */
+    char checksum_file[1024];
+    snprintf(checksum_file, sizeof(checksum_file), "%s.sha256", image_path);
+
     char checksum[65] = {0};
-    if (!compute_sha256(image_path, checksum, sizeof(checksum))) {
-        fprintf(stderr, RED "Failed to compute checksum!\n" RESET);
-        return false;
+    bool have_checksum = false;
+
+    FILE *cfp = fopen(checksum_file, "r");
+    if (cfp) {
+        /* Read first field (hash) from the sha256sum output */
+        if (fscanf(cfp, "%64s", checksum) == 1) {
+            have_checksum = true;
+        }
+        fclose(cfp);
+    }
+
+    if (!have_checksum) {
+        fprintf(stderr, YELLOW "WARNING: Could not read streamed checksum. Recomputing locally...\n" RESET);
+
+        if (!compute_sha256(image_path, checksum, sizeof(checksum))) {
+            fprintf(stderr, RED "Failed to compute checksum!\n" RESET);
+            return false;
+        }
     }
 
     char parent_disk[128] = {0};
@@ -310,10 +335,7 @@ bool write_metadata(const char *image_path,
     fprintf(fp, "  \"device\": \"%s\",\n", device);
     fprintf(fp, "  \"filesystem\": \"%s\",\n", fs_type);
     fprintf(fp, "  \"backend\": \"%s\",\n", backend);
-
-    /* New field: compression method (currently fixed to lz4) */
     fprintf(fp, "  \"compression\": \"%s\",\n", compression);
-
     fprintf(fp, "  \"partition_size_bytes\": %lld,\n", part_size);
     fprintf(fp, "  \"image_filename\": \"%s\",\n", image_path);
     fprintf(fp, "  \"image_checksum_sha256\": \"%s\",\n", checksum);

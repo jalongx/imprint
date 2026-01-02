@@ -8,70 +8,6 @@
 #include <string.h>
 #include <unistd.h>
 
-/* Very simple metadata parser: read checksum from <image>.json */
-static bool read_checksum_from_metadata(const char *image_path,
-                                        char *checksum,
-                                        size_t checksum_len)
-{
-    if (!image_path || !checksum || checksum_len == 0)
-        return false;
-
-    char meta_path[1024];
-    snprintf(meta_path, sizeof(meta_path), "%s.json", image_path);
-
-    FILE *fp = fopen(meta_path, "r");
-    if (!fp) {
-        fprintf(stderr, "DEBUG: could not open metadata file '%s'\n", meta_path);
-        return false;
-    }
-
-    char line[512];
-    bool found = false;
-
-    while (fgets(line, sizeof(line), fp)) {
-        /* Look for: "image_checksum_sha256": "..." */
-        char *p = strstr(line, "\"image_checksum_sha256\"");
-        if (!p)
-            continue;
-
-        /* Move to colon */
-        p = strchr(p, ':');
-        if (!p)
-            continue;
-
-        /* Move to first quote after colon */
-        p = strchr(p, '"');
-        if (!p)
-            continue;
-        p++; /* move past the quote */
-
-        /* Find closing quote */
-        char *end = strchr(p, '"');
-        if (!end)
-            continue;
-
-        size_t len = (size_t)(end - p);
-        if (len >= checksum_len)
-            len = checksum_len - 1;
-
-        memcpy(checksum, p, len);
-        checksum[len] = '\0';
-        found = true;
-        break;
-    }
-
-    fclose(fp);
-
-    if (!found) {
-        fprintf(stderr, "DEBUG: checksum not found in metadata '%s'\n", meta_path);
-    } else {
-        fprintf(stderr, YELLOW "Successfully read checksum from metadata: '%s'" RESET "\n",
-                checksum);
-    }
-
-    return found;
-}
-
 /* Very simple metadata parser: read backend from <image>.json */
 static bool read_backend_from_metadata(const char *image_path,
                                        char *backend,
@@ -93,19 +29,17 @@ static bool read_backend_from_metadata(const char *image_path,
     bool found = false;
 
     while (fgets(line, sizeof(line), fp)) {
-        /* Look for a line like: "  \"backend\": \"partclone.extfs\"," */
         char *p = strstr(line, "\"backend\"");
         if (!p)
             continue;
 
-        /* Find first quote after colon */
         p = strchr(p, ':');
         if (!p)
             continue;
         p = strchr(p, '"');
         if (!p)
             continue;
-        p++; /* move past the quote */
+        p++;
 
         char *end = strchr(p, '"');
         if (!end)
@@ -153,24 +87,18 @@ static bool read_compression_from_metadata(const char *image_path,
     bool found = false;
 
     while (fgets(line, sizeof(line), fp)) {
-
-        /* Look for: "compression": "lz4" */
         char *p = strstr(line, "\"compression\"");
         if (!p)
             continue;
 
-        /* Move to colon */
         p = strchr(p, ':');
         if (!p)
             continue;
-
-        /* Move to first quote after colon */
         p = strchr(p, '"');
         if (!p)
             continue;
-        p++; /* skip quote */
+        p++;
 
-        /* Find closing quote */
         char *end = strchr(p, '"');
         if (!end)
             continue;
@@ -197,7 +125,7 @@ static bool read_compression_from_metadata(const char *image_path,
     return found;
 }
 
-/* Run selected compressor + partclone restore pipeline. */
+/* Run selected decompressor + partclone restore pipeline. */
 bool run_restore_pipeline(const char *backend,
                           const char *image_path,
                           const char *device,
@@ -206,7 +134,6 @@ bool run_restore_pipeline(const char *backend,
     if (!backend || !image_path || !device)
         return false;
 
-    /* Determine decompressor based on compression string */
     const char *decomp = NULL;
 
     if (compression && strcmp(compression, "gzip") == 0)
@@ -214,16 +141,13 @@ bool run_restore_pipeline(const char *backend,
     else if (compression && strcmp(compression, "zstd") == 0)
         decomp = "zstd -dc";
     else
-        decomp = "lz4 -dc";   /* default + fallback */
+        decomp = "lz4 -dc";
 
     fprintf(stderr,
-                YELLOW "Using decompressor: %s\n" RESET,
-                decomp);
+            YELLOW "Using decompressor: %s\n" RESET,
+            decomp);
 
-        /* Build the actual restore pipeline:
-         *   <decomp> 'image' | backend -r -s - -o 'device'
-         */
-        char cmd[2048];
+    char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              "%s '%s' | %s -r -s - -o '%s'",
              decomp,
@@ -231,7 +155,6 @@ bool run_restore_pipeline(const char *backend,
              backend,
              device);
 
-    /* Wrap in pkexec so only this command runs as root */
     char pk_cmd[4096];
     snprintf(pk_cmd, sizeof(pk_cmd),
              "pkexec sh -c \"%s\"",
@@ -265,32 +188,6 @@ bool restore_run_interactive(void)
         return false;
     }
 
-    /* 1b. Verify checksum before doing anything destructive. */
-    char expected_sha[128] = {0};
-    if (!read_checksum_from_metadata(image_path, expected_sha, sizeof(expected_sha))) {
-        ui_error("Could not read checksum from metadata.\n"
-        "Make sure the .json file exists next to the image.");
-        free(image_path);
-        return false;
-    }
-
-    char actual_sha[128] = {0};
-    if (!compute_sha256(image_path, actual_sha, sizeof(actual_sha))) {
-        ui_error("Could not compute checksum for the image file.");
-        free(image_path);
-        return false;
-    }
-
-    if (strcmp(expected_sha, actual_sha) != 0) {
-        ui_error("Checksum mismatch!\n"
-        "The backup image may be corrupted.\n"
-        "Restore aborted.");
-        free(image_path);
-        return false;
-    }
-
-    ui_info("Checksum verified successfully.\n");
-
     /* 2. Choose target partition. */
     char *device = ui_choose_partition_with_title(
         "Select destination partition for restore",
@@ -311,14 +208,14 @@ bool restore_run_interactive(void)
         return false;
     }
 
-    /* 3b. Read compression from metadata JSON. */
+    /* 4. Read compression from metadata JSON. */
     char compression[64] = {0};
     if (!read_compression_from_metadata(image_path, compression, sizeof(compression))) {
         fprintf(stderr, YELLOW "No compression field found in metadata. Assuming lz4.\n" RESET);
         strcpy(compression, "lz4");
     }
 
-    /* 4. Run restore pipeline. */
+    /* 5. Run restore pipeline. */
     bool ok = run_restore_pipeline(backend, image_path, device, compression);
 
     free(device);
@@ -326,4 +223,3 @@ bool restore_run_interactive(void)
 
     return ok;
 }
-
