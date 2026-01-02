@@ -4,9 +4,9 @@ whenever I wanted to make an image of a partition. So I began writing a wrapper 
 or restore an image for any partition that I can safely unmount. For core system partitions, I boot to a small maintenance/rescue partition (a habit from the early 1990's)
 and run the backup/restore from there. By the time I had added a rescue ISO, I figured I might as well release this program.
 
-====================
+#====================
 Imprint Disk Imaging
-====================
+#====================
 
 Imprint is a modern, Linux‑native reimagining of the classic Norton Ghost workflow.
 It provides a clean, safe, and fast way to back up and restore partitions using partclone, with a simple Zenity‑based UI and strong integrity guarantees.
