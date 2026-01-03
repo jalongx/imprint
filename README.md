@@ -1,4 +1,4 @@
-# Imprint Disk Imaging
+# Imprint Disk Imager
 
 Imprint is a modern, Linux‑native reimagining of the classic Norton Ghost workflow.  
 It provides a clean, safe, and fast way to back up and restore partitions using partclone, with a simple Zenity‑based UI and strong integrity guarantees.
@@ -7,7 +7,7 @@ It provides a clean, safe, and fast way to back up and restore partitions using 
 
 ## Background
 
-I’m a long‑time Windows refugee who relied on partition imaging for decades.  
+I’m a long‑time Windows user who is now a happy refugee with Linux. I relied on partition imaging for decades.  
 The Linux options I found required booting heavy rescue ISOs that often lacked support for newer hardware (USB4/Thunderbolt enclosures, NVMe bridges, etc.). I also didn’t want to reboot into an ISO every time I needed to image a partition.
 
 So I began writing a small wrapper around partclone… then added features… then added a rescue ISO… and eventually realized I had built something worth sharing.
@@ -27,6 +27,30 @@ Imprint now lets me easily create or restore an image for any partition I can sa
 - **Safety checks** to prevent restoring to the wrong partition or filesystem  
 - **Clean restore UI** that only shows the correct entry (e.g., `.000` for chunked sets)  
 - **Rescue ISO** for full offline backup/restore on any machine  
+
+---
+
+## Using Imprint on Windows Systems
+
+Imprint works perfectly for Windows users when run from the **Imprint Rescue ISO**.  
+You do not need Linux installed — simply boot the ISO from a USB stick and you can:
+
+- back up Windows partitions  
+- restore Windows partitions  
+- image NVMe, SATA, USB, and RAID volumes  
+- work offline without touching the installed OS  
+
+This makes Imprint a safe, modern alternative to classic tools like Norton Ghost, Clonezilla, or Acronis — with a clean UI and strong integrity guarantees.
+
+---
+
+## Imprint Rescue ISO
+
+A lightweight KDE‑based rescue environment is available for full offline backup and restore, or when system partitions must remain unmounted.
+
+👉 https://github.com/jalongx/imprint_iso_kde
+
+If you can’t afford to donate but need a prebuilt ISO, open an issue and I’ll make one available.
 
 ---
 
@@ -93,7 +117,7 @@ Here’s what’s planned for the 1.0 milestone:
 
 ## Supporting the Project
 
-Imprint is built and maintained by a retired senior on a fixed income.  
+Imprint is built and maintained by a retired senior on a fixed income living in uncertain times.  
 If this tool helps you, or if you’d like to support the continued development toward 1.0, consider becoming a sponsor.
 
 Your support helps fund:
@@ -106,3 +130,8 @@ Your support helps fund:
 Supporters may also receive access to **prebuilt rescue ISOs** and other convenience perks as a thank‑you.
 
 ---
+
+## Disclaimer
+
+Working with disk images is inherently risky. If you are uncertain about any step, please ask for help before proceeding.  
+I take no responsibility for any damage or data loss that may occur to your partitions, filesystems, or devices.
