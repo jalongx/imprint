@@ -1,65 +1,108 @@
-I am a refugee from windows who has long been used to backing up my system with partition images. The only linux solutions I found involved
-booting with rescue ISOs that sometimes lacked support for newer hardware (like USB4/Thunderbolt enclosures). I also didn't like having to boot to an ISO
-whenever I wanted to make an image of a partition. So I began writing a wrapper for partclone, began adding new features and here we are. I can now easily create
-or restore an image for any partition that I can safely unmount. For core system partitions, I boot to a small maintenance/rescue partition (a habit from the early 1990's)
-and run the backup/restore from there. By the time I had added a rescue ISO, I figured I might as well release this program.
-
----
-
 # Imprint Disk Imaging
 
+Imprint is a modern, Linux‑native reimagining of the classic Norton Ghost workflow.  
+It provides a clean, safe, and fast way to back up and restore partitions using partclone, with a simple Zenity‑based UI and strong integrity guarantees.
+
 ---
 
+## Background
 
-Imprint is a modern, Linux‑native reimagining of the classic Norton Ghost workflow.
-It provides a clean, safe, and fast way to back up and restore partitions using partclone, with a simple Zenity‑based UI and strong integrity guarantees.
-Features
+I’m a long‑time Windows refugee who relied on partition imaging for decades.  
+The Linux options I found required booting heavy rescue ISOs that often lacked support for newer hardware (USB4/Thunderbolt enclosures, NVMe bridges, etc.). I also didn’t want to reboot into an ISO every time I needed to image a partition.
 
-    Ghost‑style simplicity — pick a partition, pick a filename, done
+So I began writing a small wrapper around partclone… then added features… then added a rescue ISO… and eventually realized I had built something worth sharing.
 
-    Streaming backup pipeline (no temp files, no double I/O)
+Imprint now lets me easily create or restore an image for any partition I can safely unmount. For core system partitions, I boot into a tiny maintenance/rescue partition (a habit from the early 1990s) and run Imprint from there. Once the rescue ISO was working, releasing the tool publicly felt like the right next step.
 
-    Fast compression with lz4, zstd, or gzip
+---
 
-    Automatic SHA‑256 checksums for every image
+## Features
 
-    Chunked image support (e.g., 2 GB / 4 GB chunks for FAT32 or portability)
+- **Ghost‑style simplicity** — pick a partition, pick a filename, done  
+- **Streaming backup pipeline** (no temp files, no double I/O)  
+- **Fast compression** with lz4, zstd, or gzip  
+- **Automatic SHA‑256 checksums** for every image  
+- **Chunked image support** (2 GB / 4 GB chunks for FAT32, SMB, portability)  
+- **Metadata‑rich JSON** describing filesystem, backend, layout, checksum, and chunking  
+- **Safety checks** to prevent restoring to the wrong partition or filesystem  
+- **Clean restore UI** that only shows the correct entry (e.g., `.000` for chunked sets)  
+- **Rescue ISO** for full offline backup/restore on any machine  
 
-    Metadata‑rich JSON describing filesystem, backend, layout, checksum, and chunking
+---
 
-    Safety checks to prevent restoring to the wrong partition or filesystem
-
-    Clean restore UI that only shows the correct image entry (e.g., .000 for chunked sets)
-
-Dependencies
+## Dependencies
 
 Imprint uses standard Linux tools:
 
-    partclone
+- partclone  
+- zenity  
+- lz4, zstd, or gzip  
+- sha256sum  
+- pkexec (for privilege elevation)
 
-    zenity
+---
 
-    lz4, zstd, or gzip
+## Supported Filesystems
 
-    sha256sum
+Anything supported by partclone, including:
 
-    pkexec (for privilege elevation)
+- ext4  
+- xfs  
+- btrfs  
+- ntfs  
+- fat/exfat  
+- f2fs  
+- and more  
 
-Supported Filesystems
+---
 
-Anything supported by partclone, including ext4, xfs, btrfs, ntfs, fat/exfat, f2fs, and more.
+## Why Imprint?
 
-Why Imprint?
+Imprint focuses on **predictability**, **transparency**, and **safety**.
 
-Imprint focuses on predictability, transparency, and safety.
-If you liked how Ghost “just worked,” Imprint brings that same reliability to modern Linux systems — with better integrity checks, better metadata, and a cleaner UI.
+If you liked how Ghost “just worked,” Imprint brings that same reliability to modern Linux systems — with better integrity checks, better metadata, and a cleaner UI. It’s designed to be deterministic, human‑readable, and easy to trust.
 
-Backup Dialog
+---
+
+## Screenshots
+
+### Backup Dialog  
 <img width="926" height="1362" alt="imprint_bkup_1" src="https://github.com/user-attachments/assets/632d0e30-f302-4150-b605-3ccf0f892a98" />
 
-Restore Dialog
+### Restore Dialog  
 <img width="1165" height="1303" alt="imprint_restore_1" src="https://github.com/user-attachments/assets/19e9921a-3bf1-4c9f-b621-8d2313f78f6a" />
 
-Imprint Rescue ISO
+### Imprint Rescue ISO  
 <img width="1920" height="1080" alt="imprint_iso_1" src="https://github.com/user-attachments/assets/f6b8b0d2-5662-49a1-9214-3c6c02388025" />
 
+---
+
+## Roadmap (toward 1.0)
+
+Imprint is currently **version 0.90** — stable and fully usable, but still evolving.  
+Here’s what’s planned for the 1.0 milestone:
+
+- **Unified `imprint` binary** (merge backup + restore into one tool)  
+- **Command‑line switches** for automation and headless use  
+- **Multi‑partition backup/restore**  
+- **Verification‑only mode** (validate images without restoring)  
+- **Improved documentation**  
+- **Optional supporter perks** (prebuilt ISOs, convenience features)
+
+---
+
+## Supporting the Project
+
+Imprint is built and maintained by a retired senior on a fixed income.  
+If this tool helps you, or if you’d like to support the continued development toward 1.0, consider becoming a sponsor.
+
+Your support helps fund:
+
+- ongoing maintenance  
+- hardware testing  
+- rescue ISO improvements  
+- future features from the roadmap  
+
+Supporters may also receive access to **prebuilt rescue ISOs** and other convenience perks as a thank‑you.
+
+---
