@@ -144,16 +144,48 @@ bool run_backup_pipeline(const char *backend,
              "pkexec %s",
              partclone_cmd);
 
+    /* --------------------------------------------------
+     * Determine where FIFOs should live.
+     * -------------------------------------------------- */
+    char fifo_dir[1024];
+
+    if (gx_workdir_override[0] != '\0') {
+        snprintf(fifo_dir, sizeof(fifo_dir), "%s", gx_workdir_override);
+    } else {
+        const char *slash = strrchr(output_path, '/');
+        if (slash) {
+            size_t len = (size_t)(slash - output_path);
+            if (len >= sizeof(fifo_dir))
+                len = sizeof(fifo_dir) - 1;
+            memcpy(fifo_dir, output_path, len);
+            fifo_dir[len] = '\0';
+        } else {
+            snprintf(fifo_dir, sizeof(fifo_dir), ".");
+        }
+    }
+
+    mkdir(fifo_dir, 0700);
+
     /* -------------------------------
      * 1. Create FIFO for checksum
      * ------------------------------- */
     char checksum_fifo[1024];
+
+    /* Safe, warning‑free construction */
+    size_t need = strlen(fifo_dir) + strlen("/sha256pipe.fifo") + 1;
+    if (need >= sizeof(checksum_fifo)) {
+        ui_error("FIFO path too long.");
+        return false;
+    }
+
     snprintf(checksum_fifo, sizeof(checksum_fifo),
-             "%s.sha256pipe", output_path);
+             "%s/sha256pipe.fifo",
+             fifo_dir);
 
     if (mkfifo(checksum_fifo, 0600) != 0) {
         perror("mkfifo (checksum fifo)");
-        ui_error("Failed to create checksum FIFO.");
+        ui_error("Failed to create checksum FIFO.\n\n"
+        "The destination or work directory may not support FIFOs.");
         return false;
     }
 
@@ -169,7 +201,6 @@ bool run_backup_pipeline(const char *backend,
     }
 
     if (sha_pid == 0) {
-        /* Child: run sha256sum streaming from FIFO */
         char sha_cmd[2048];
         snprintf(sha_cmd, sizeof(sha_cmd),
                  "sha256sum < '%s' > '%s.sha256'",
@@ -183,19 +214,10 @@ bool run_backup_pipeline(const char *backend,
 
     /*
      * 3. Build the main pipeline.
-     *
-     * Normal:
-     *   pk_partclone | tee fifo | comp_cmd > output_path
-     *
-     * Chunked:
-     *   pk_partclone | tee fifo | comp_cmd | split -b <MB>M -d -a 3 - output_path.
-     *
-     * - set -o pipefail ensures we see partclone failures.
      */
     char full_cmd[4096];
 
     if (gx_config.chunk_size_mb > 0) {
-        /* Chunked backup pipeline */
         snprintf(full_cmd, sizeof(full_cmd),
                  "set -o pipefail; "
                  "%s | tee '%s' | %s | split -b %dM -d -a 3 - '%s.'",
@@ -205,7 +227,6 @@ bool run_backup_pipeline(const char *backend,
                  gx_config.chunk_size_mb,
                  output_path);
     } else {
-        /* Normal single-file backup */
         snprintf(full_cmd, sizeof(full_cmd),
                  "set -o pipefail; "
                  "%s | tee '%s' | %s > '%s'",
@@ -220,16 +241,15 @@ bool run_backup_pipeline(const char *backend,
     /* 4. Execute pipeline */
     int rc = system(full_cmd);
 
-    /* 5. Close FIFO (removes name; readers still complete) */
+    /* 5. Close FIFO */
     unlink(checksum_fifo);
 
-    /* 6. Wait for sha256sum to finish */
+    /* 6. Wait for sha256sum */
     int sha_status = 0;
     if (waitpid(sha_pid, &sha_status, 0) < 0) {
         perror("waitpid (sha256sum)");
     }
 
-    /* Decode exit status of the pipeline */
     int exit_code = -1;
     if (rc != -1)
         exit_code = WEXITSTATUS(rc);
@@ -238,11 +258,6 @@ bool run_backup_pipeline(const char *backend,
             YELLOW "DEBUG: system() returned rc=%d, exit_code=%d, sha_status=%d\n" RESET,
             rc, exit_code, sha_status);
 
-    /*
-     * FAILURE HANDLING:
-     * If partclone or compressor fails, pipefail ensures exit_code != 0.
-     * We delete the partial image and any checksum file, and show the NTFS warning.
-     */
     if (rc == -1 || exit_code != 0) {
 
         unlink(output_path);
@@ -263,7 +278,6 @@ bool run_backup_pipeline(const char *backend,
         return false;
     }
 
-    /* Write metadata only for valid backups */
     write_metadata(output_path, device, fs_type, backend, gx_config.compression);
 
     return true;
@@ -273,12 +287,14 @@ bool run_backup_pipeline(const char *backend,
 
 bool backup_run_interactive(void)
 {
+    /* Always start with no override to avoid stale state. */
+    gx_workdir_override[0] = '\0';
+
     /* 1. Choose partition. */
     char *device = ui_choose_partition();
     if (!device) {
         return false;
     }
-    // fprintf(stderr, "DEBUG: partition selected: '%s'\n", device);
 
     /* 2. Choose backup directory. */
     char *dir = ui_choose_directory();
@@ -286,7 +302,6 @@ bool backup_run_interactive(void)
         free(device);
         return false;
     }
-    // fprintf(stderr, "DEBUG: directory selected: '%s'\n", dir);
 
     /* 3. Detect filesystem type. */
     char fs_type[64] = {0};
@@ -296,7 +311,6 @@ bool backup_run_interactive(void)
         free(device);
         return false;
     }
-    // fprintf(stderr, "DEBUG: filesystem detected: '%s'\n", fs_type);
 
     /* 4. Map to partclone backend. */
     const char *backend = partclone_backend_for_fs(fs_type);
@@ -306,7 +320,6 @@ bool backup_run_interactive(void)
         free(device);
         return false;
     }
-    // fprintf(stderr, "DEBUG: backend selected: '%s'\n", backend);
 
     /* 5. Build default filename and ask user to confirm/modify. */
     char default_name[256];
@@ -318,7 +331,6 @@ bool backup_run_interactive(void)
         free(device);
         return false;
     }
-    // fprintf(stderr, "DEBUG: filename returned to backup: '%s'\n", filename);
 
     /* 6. Build full output path. */
     char *output_path = join_path(dir, filename);
@@ -329,14 +341,23 @@ bool backup_run_interactive(void)
         free(filename);
         return false;
     }
-    // fprintf(stderr, "DEBUG: output path: '%s'\n", output_path);
+
+    /* 6a. Test FIFO capability on the chosen directory.
+     * If it fails (exFAT/SMB/FUSE/etc.), fall back to /tmp/imprint_work.
+     */
+    if (!gx_test_fifo_capability(dir)) {
+        snprintf(gx_workdir_override, sizeof(gx_workdir_override),
+                 "/tmp/imprint_work");
+        mkdir(gx_workdir_override, 0700);
+    }
 
     /* 7. Run backup pipeline (now with fs_type). */
     bool ok = run_backup_pipeline(backend, device, fs_type, output_path);
 
     if (ok) {
-        // Remember the directory for next time
-        strncpy(gx_config.backup_dir, dir, sizeof(gx_config.backup_dir)-1);
+        /* Remember the directory for next time. */
+        strncpy(gx_config.backup_dir, dir, sizeof(gx_config.backup_dir) - 1);
+        gx_config.backup_dir[sizeof(gx_config.backup_dir) - 1] = '\0';
         ghostx_config_save();
 
         ui_info("Backup completed successfully.");
@@ -348,7 +369,5 @@ bool backup_run_interactive(void)
     free(output_path);
 
     return ok;
-
 }
-
 

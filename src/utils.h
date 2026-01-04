@@ -45,5 +45,8 @@ void gx_ensure_terminal(int argc, char **argv);
 
 void ghostx_print_banner(const char *program_name);
 
+bool gx_test_fifo_capability(const char *dir);
+
+extern char gx_workdir_override[1024];
 
 #endif /* UTILS_H */

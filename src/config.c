@@ -12,6 +12,11 @@
 GhostXConfig gx_config;
 
 /* ---------------------------------------------------------
+ * Global override for FIFO workdir (actual definition)
+ * --------------------------------------------------------- */
+char gx_workdir_override[1024] = {0};
+
+/* ---------------------------------------------------------
  * Trim leading whitespace
  * --------------------------------------------------------- */
 static char *ltrim(char *s)
@@ -20,6 +25,7 @@ static char *ltrim(char *s)
         s++;
     return s;
 }
+
 
 /* ---------------------------------------------------------
  * Parse a single key=value line

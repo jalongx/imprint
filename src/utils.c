@@ -15,6 +15,9 @@
 #include <ctype.h>
 #define OPENSSL_SUPPRESS_DEPRECATED
 #include <openssl/sha.h>
+#include <sys/statfs.h>
+#include <errno.h>
+
 
 void ghostx_print_banner(const char *program_name)
 {
@@ -479,4 +482,32 @@ bool get_fs_type(const char *device, char *fs_type, int fs_type_len)
     fs_type[fs_type_len - 1] = '\0';
 
     return true;
+}
+
+bool gx_test_fifo_capability(const char *dir)
+{
+    if (!dir)
+        return false;
+
+    char test_fifo[1024];
+    snprintf(test_fifo, sizeof(test_fifo), "%s/.imprint_fifo_test", dir);
+
+    /* Try to create a FIFO */
+    if (mkfifo(test_fifo, 0600) == 0) {
+        unlink(test_fifo);
+        return true;
+    }
+
+    /* If mkfifo failed, check errno */
+    switch (errno) {
+        case EROFS:   /* read-only filesystem */
+        case ENOTSUP: /* filesystem does not support FIFOs */
+        case EINVAL:  /* common for SMB/exFAT/FUSE */
+        case EPERM:
+            return false;
+
+        default:
+            /* Unexpected error — treat as unsupported */
+            return false;
+    }
 }
