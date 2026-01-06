@@ -99,7 +99,7 @@ static bool read_backend_from_metadata(const char *image_path,
     if (!found) {
         fprintf(stderr, "DEBUG: backend not found in metadata '%s'\n", meta_path);
     } else {
-        fprintf(stderr, YELLOW "\n\nSuccessfully determined backend from metadata: '%s'" RESET "\n\n", backend);
+        fprintf(stderr, YELLOW "Successfully determined backend from metadata: '%s'" RESET "\n", backend);
     }
 
     return found;
@@ -241,7 +241,7 @@ static bool read_compression_from_metadata(const char *image_path,
     if (!found) {
         fprintf(stderr, "DEBUG: compression not found in metadata '%s'\n\n", meta_path);
     } else {
-        fprintf(stderr, YELLOW "Successfully read compression from metadata: '%s'" RESET "\n\n",
+        fprintf(stderr, YELLOW "Successfully read compression from metadata: '%s'" RESET "\n",
                 compression);
     }
 
@@ -321,6 +321,14 @@ bool run_restore_pipeline(const char *backend,
         return false;
     }
 
+    fprintf(stderr,
+            WHITE "\n----------------------------------------\n" RESET);
+    fprintf(stderr,
+            GREEN "Restore completed successfully.\n" RESET);
+    fprintf(stderr,
+            WHITE "----------------------------------------\n" RESET);
+
+
     ui_info("Restore completed successfully.");
     printf(YELLOW "\nDone.\n" RESET);
     return true;
@@ -359,14 +367,14 @@ bool restore_run_interactive(void)
      */
     bool chunked = have_chunked_meta ? chunked_by_meta : chunked_by_name;
 
-    fprintf(stderr,
-            YELLOW "DEBUG: selected='%s', base='%s', "
-            "chunked_by_name=%s, chunked_by_meta=%s, final=%s\n" RESET,
-            selected_path,
-            base_image,
-            chunked_by_name ? "true" : "false",
-            have_chunked_meta ? (chunked_by_meta ? "true" : "false") : "N/A",
-            chunked ? "true" : "false");
+    // fprintf(stderr,
+    //         YELLOW "DEBUG: selected='%s', base='%s', "
+    //         "chunked_by_name=%s, chunked_by_meta=%s, final=%s\n" RESET,
+    //         selected_path,
+    //         base_image,
+    //         chunked_by_name ? "true" : "false",
+    //         have_chunked_meta ? (chunked_by_meta ? "true" : "false") : "N/A",
+    //         chunked ? "true" : "false");
 
     /* 2. Choose target partition. */
     char *device = ui_choose_partition_with_title(

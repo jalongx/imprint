@@ -23,12 +23,12 @@ void ghostx_print_banner(const char *program_name)
 {
     const char *line = "============================================================";
 
-    printf(GREEN "\n%s\n" RESET, line);
-    printf(GREEN "%s v%s, %s\n" RESET,
+    printf(WHITE "\n%s\n\n" RESET, line);
+    printf(GREEN "%s v%s, %s\n\n" RESET,
            program_name,
            GHOSTX_VERSION,
            GHOSTX_BUILD_DATE);
-    printf(GREEN "%s\n\n" RESET, line);
+    printf(WHITE "%s\n\n" RESET, line);
 }
 
 
@@ -351,7 +351,7 @@ bool write_metadata(const char *image_path,
 
     fclose(fp);
 
-    printf(YELLOW "\nMetadata written successfully.\n" RESET);
+    // printf(YELLOW "\nMetadata written successfully.\n" RESET);
     return true;
 }
 

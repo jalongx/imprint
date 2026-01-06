@@ -1,3 +1,7 @@
+#define _POSIX_C_SOURCE 200809L
+
+#include <time.h>   // optional but recommended to include explicitly
+
 #include "backup.h"
 #include "utils.h"
 #include "ui.h"
@@ -11,6 +15,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+
 
 /* Map compression string to compressor command */
 static const char *get_compressor_cmd(const char *comp)
@@ -131,6 +136,15 @@ bool run_backup_pipeline(const char *backend,
             YELLOW "Using compressor: %s\n" RESET,
             comp_cmd);
 
+    if (gx_config.chunk_size_mb > 0) {
+        fprintf(stderr,
+                YELLOW "Output chunking: On (%d MB)\n",
+                gx_config.chunk_size_mb);
+    } else {
+        fprintf(stderr,
+                YELLOW "Output chunking: Off\n");
+    }
+
     /* Build the partclone command */
     char partclone_cmd[1024];
     snprintf(partclone_cmd, sizeof(partclone_cmd),
@@ -236,7 +250,12 @@ bool run_backup_pipeline(const char *backend,
                  output_path);
     }
 
-    fprintf(stderr, YELLOW "Starting partclone with streaming checksum...\n\n" RESET);
+     fprintf(stderr,
+            YELLOW "Starting partclone with streaming checksum using the command...\n" RESET);
+
+    fprintf(stderr,
+            GREEN "     %s\n\n" RESET,
+            full_cmd);
 
     /* 4. Execute pipeline */
     int rc = system(full_cmd);
@@ -254,9 +273,9 @@ bool run_backup_pipeline(const char *backend,
     if (rc != -1)
         exit_code = WEXITSTATUS(rc);
 
-    fprintf(stderr,
-            YELLOW "DEBUG: system() returned rc=%d, exit_code=%d, sha_status=%d\n" RESET,
-            rc, exit_code, sha_status);
+    // fprintf(stderr,
+    //         YELLOW "DEBUG: system() returned rc=%d, exit_code=%d, sha_status=%d\n" RESET,
+    //         rc, exit_code, sha_status);
 
     if (rc == -1 || exit_code != 0) {
 
@@ -283,12 +302,14 @@ bool run_backup_pipeline(const char *backend,
     return true;
 }
 
-
-
 bool backup_run_interactive(void)
 {
     /* Always start with no override to avoid stale state. */
     gx_workdir_override[0] = '\0';
+
+    /* Capture start time for duration/throughput reporting */
+    struct timespec t_start, t_end;
+    clock_gettime(CLOCK_MONOTONIC, &t_start);
 
     /* 1. Choose partition. */
     char *device = ui_choose_partition();
@@ -342,23 +363,159 @@ bool backup_run_interactive(void)
         return false;
     }
 
-    /* 6a. Test FIFO capability on the chosen directory.
-     * If it fails (exFAT/SMB/FUSE/etc.), fall back to /tmp/imprint_work.
-     */
+    /* 6a. Test FIFO capability on the chosen directory. */
     if (!gx_test_fifo_capability(dir)) {
+
+        fprintf(stderr,
+                RED "Non-FIFO filesystem detected: %s\n"
+                "Using temporary work directory: %s\n\n" RESET,
+                fs_type,
+                "/tmp/imprint_work");
+
         snprintf(gx_workdir_override, sizeof(gx_workdir_override),
                  "/tmp/imprint_work");
+
         mkdir(gx_workdir_override, 0700);
     }
 
-    /* 7. Run backup pipeline (now with fs_type). */
+    /* 7. Run backup pipeline */
     bool ok = run_backup_pipeline(backend, device, fs_type, output_path);
 
+    /* Capture end time */
+    clock_gettime(CLOCK_MONOTONIC, &t_end);
+
+    /* Compute duration */
+    double duration_sec =
+    (t_end.tv_sec - t_start.tv_sec) +
+    (t_end.tv_nsec - t_start.tv_nsec) / 1e9;
+
+    /* Compute throughput (MB/s) and human-readable size */
+    double mb_per_sec = 0.0;
+    char size_str[64] = "Unknown";
+    char alloc_str[64] = "Unknown";
+    int chunk_count = 0;
+    off_t total_bytes = 0;
+    off_t total_allocated = 0;
+
+    if (gx_config.chunk_size_mb > 0) {
+        /* Chunked output: sum all chunk files */
+
+        /* Prefix is always small, so use a small buffer to silence GCC */
+        char prefix[256];
+        snprintf(prefix, sizeof(prefix), "%s.", output_path);
+
+        char chunk_path[2048];
+
+        /* Hard limit: 0–999 chunks → silences GCC warning */
+        for (unsigned i = 0; i < 1000; i++) {
+
+            /* Step 1: copy prefix */
+            strncpy(chunk_path, prefix, sizeof(chunk_path));
+            chunk_path[sizeof(chunk_path) - 1] = '\0';
+
+            /* Step 2: append chunk number safely */
+            snprintf(chunk_path + strlen(chunk_path),
+                     sizeof(chunk_path) - strlen(chunk_path),
+                     "%03u",
+                     i);
+
+            struct stat st;
+            if (stat(chunk_path, &st) != 0)
+                break;
+
+            total_bytes += st.st_size;
+            total_allocated += (off_t)st.st_blocks * 512;
+            chunk_count++;
+        }
+
+        if (chunk_count > 0 && duration_sec > 0.0) {
+            double size_mb = total_bytes / (1024.0 * 1024.0);
+            double size_gb = size_mb / 1024.0;
+
+            if (size_gb >= 1.0)
+                snprintf(size_str, sizeof(size_str), "%.2f GB (%d chunks)", size_gb, chunk_count);
+            else
+                snprintf(size_str, sizeof(size_str), "%.2f MB (%d chunks)", size_mb, chunk_count);
+
+            double alloc_mb = total_allocated / (1024.0 * 1024.0);
+            double alloc_gb = alloc_mb / 1024.0;
+
+            if (alloc_gb >= 1.0)
+                snprintf(alloc_str, sizeof(alloc_str), "%.2f GB", alloc_gb);
+            else
+                snprintf(alloc_str, sizeof(alloc_str), "%.2f MB", alloc_mb);
+
+            mb_per_sec = size_mb / duration_sec;
+        }
+    }
+    else {
+        /* Single file output */
+        struct stat st;
+        if (stat(output_path, &st) == 0 && duration_sec > 0.0) {
+            total_bytes = st.st_size;
+            total_allocated = (off_t)st.st_blocks * 512;
+
+            double size_mb = total_bytes / (1024.0 * 1024.0);
+            double size_gb = size_mb / 1024.0;
+
+            if (size_gb >= 1.0)
+                snprintf(size_str, sizeof(size_str), "%.2f GB", size_gb);
+            else
+                snprintf(size_str, sizeof(size_str), "%.2f MB", size_mb);
+
+            double alloc_mb = total_allocated / (1024.0 * 1024.0);
+            double alloc_gb = alloc_mb / 1024.0;
+
+            if (alloc_gb >= 1.0)
+                snprintf(alloc_str, sizeof(alloc_str), "%.2f GB", alloc_gb);
+            else
+                snprintf(alloc_str, sizeof(alloc_str), "%.2f MB", alloc_mb);
+
+            mb_per_sec = size_mb / duration_sec;
+        }
+    }
+
     if (ok) {
-        /* Remember the directory for next time. */
+        /* Remember the directory for next time */
         strncpy(gx_config.backup_dir, dir, sizeof(gx_config.backup_dir) - 1);
         gx_config.backup_dir[sizeof(gx_config.backup_dir) - 1] = '\0';
         ghostx_config_save();
+
+        /* Build paths for checksum and metadata */
+        char sha_path[2048];
+        snprintf(sha_path, sizeof(sha_path), "%s.sha256", output_path);
+
+        char meta_path[2048];
+        snprintf(meta_path, sizeof(meta_path), "%s.json", output_path);
+
+        /* Console output */
+        fprintf(stderr,
+                YELLOW "\nImage written to:\n"
+                "    %s\n\n"
+                "Checksum written to:\n"
+                "    %s\n\n"
+                "Metadata written to:\n"
+                "    %s\n\n" RESET,
+                output_path,
+                sha_path,
+                meta_path);
+
+        fprintf(stderr,
+                WHITE "Backup file size: %s\n"
+                "Allocated on disk: %s\n"
+                "Duration: %.2f seconds\n"
+                "Average throughput: %.2f MB/s\n\n" RESET,
+                size_str,
+                alloc_str,
+                duration_sec,
+                mb_per_sec);
+
+        fprintf(stderr,
+                WHITE "----------------------------------------\n" RESET);
+        fprintf(stderr,
+                GREEN "Backup completed successfully.\n" RESET);
+        fprintf(stderr,
+                WHITE "----------------------------------------\n" RESET);
 
         ui_info("Backup completed successfully.");
     }
@@ -370,4 +527,3 @@ bool backup_run_interactive(void)
 
     return ok;
 }
-
