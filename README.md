@@ -14,7 +14,7 @@ It provides a clean, safe, and fast way to back up and restore partitions using 
 
 ## Background
 
-I’m a long‑time Windows user gamer who recently moved to Linux. I relied on partition imaging for backup/restore for decades. None of the backup software I have previously used would work on ext4 or btrfs.
+I’m a long‑time Windows user and gamer who recently moved to Linux. I relied on partition imaging for backup/restore for decades. None of the backup software I have previously used would work on ext4 or btrfs.
 The Linux options I found required booting rescue ISOs that often lacked support for newer hardware (USB4/Thunderbolt enclosures, NVMe bridges, etc.). I also didn’t want to reboot into an ISO every time I needed to image a partition.
 
 So I began writing a small wrapper around partclone… then added features… then added a rescue ISO… 
