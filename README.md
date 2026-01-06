@@ -95,8 +95,14 @@ Anything supported by partclone, including:
 ### Restore Dialog  
 <img width="1165" height="1303" alt="imprint_restore_1" src="https://github.com/user-attachments/assets/19e9921a-3bf1-4c9f-b621-8d2313f78f6a" />
 
-#### Program Output
-<img width="1729" height="1148" alt="output" src="https://github.com/user-attachments/assets/03eb5c18-3d3c-4dbc-ad59-682a509ad5c5" />
+### Backup Output
+<img width="2044" height="1056" alt="backup_output" src="https://github.com/user-attachments/assets/1d1c7408-0d13-44c1-b942-42adea3c44da" />
+
+### Restore Output
+<img width="1398" height="791" alt="restore_output" src="https://github.com/user-attachments/assets/16d06707-a6b8-4b49-ad52-228bb7aef39d" />
+
+### Metadata
+<img width="925" height="1397" alt="metadata" src="https://github.com/user-attachments/assets/a4fc762a-4665-4b26-acb6-a226cdcebd9f" />
 
 ### Imprint Rescue ISO  
 <img width="1920" height="1080" alt="imprint_iso_1" src="https://github.com/user-attachments/assets/f6b8b0d2-5662-49a1-9214-3c6c02388025" />
