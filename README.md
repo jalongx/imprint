@@ -3,14 +3,14 @@
 
 Imprint provides a safe and fast way to back up and restore partitions using partclone with a simple Zenity‑based UI.
 
-- You can backup or restore unmounted **non-system** partitions from withing your linux operating system.
-- You can backup and restore **system partitions** by booting with the Imprint Rescue ISO or booting to another linux installation on the same computer.
+- You can backup or restore unmounted **non-system** partitions from within your Linux operating system.
+- You can backup and restore **system partitions** by booting with the Imprint Rescue ISO or booting to another Linux installation on the same computer.
 - It only backs up the data on the partition -- no raw images that are the same size as the partition you're backing up.
 - Can be run from the command line or from an icon on your desktop.
 
-THIS IS BETA SOFTWARE. It works fine on my rather complex system but there are bound to be limitations and errors on other system setups.
+THIS IS BETA SOFTWARE. It works fine on my rather complex system but there are bound to be limitations and errors on other system setups. Imprint is stable for everyday use on the tested filesystems and environments, but it has not yet been validated across the full range of Linux distributions, storage hardware, and edge cases.
 
-- It has only been tested on the follwing filesystems: Ext2/3/4, BTRFS, NTFS, FAT16/32/exFAT.
+- It has only been tested on the following filesystems: Ext2/3/4, BTRFS, NTFS, FAT16/32/exFAT. Other filesystems supported by partclone should work, but they have not yet been formally tested.
 - It has only been tested on NFS and SMB network filesystems.
 - It inherits partclone's limitations: you cannot restore an image to a partition smaller than the original.
 - It cannot (yet) restore an image to a bare drive. You have to create a partition big enough for it. The original partition size can be found in the metadata file accompanying the image.
@@ -25,7 +25,7 @@ The Linux options I found required booting rescue ISOs that often lacked support
 
 So I began writing a small wrapper around partclone… then added features… then added a rescue ISO… 
 
-Imprint now lets me easily create or restore an image for any partition I can safely unmount. For core system partitions, I boot into a tiny maintenance/rescue linux installation (a habit from the early 1990s) and run Imprint from there. Once the rescue ISO was working, I decided that releasing the tool might benefit other windows refugees like myself.
+Imprint now lets me easily create or restore an image for any partition I can safely unmount. For core system partitions, I boot into a tiny maintenance/rescue Linux installation (a habit from the early 1990s) and run Imprint from there. Once the rescue ISO was working, I decided that releasing the tool might benefit both long-time Linux users and other windows refugees like myself.
 
 ---
 
@@ -39,6 +39,7 @@ Imprint now lets me easily create or restore an image for any partition I can sa
 - **Metadata‑rich JSON** describing filesystem, backend, layout, checksum, and chunking  
 - **Safety checks** to prevent restoring to the wrong partition or filesystem  
 - **Clean restore UI** that only shows the correct entry (e.g., `.000` for chunked sets)  
+- **Metadata** in stable and versioned JSON format. A formal metadata schema will be documented as part of the 1.0 milestone.
 - **Rescue ISO** for full offline backup/restore on any machine  
 
 ---
@@ -59,7 +60,7 @@ This makes Imprint a safe, modern alternative to classic tools like Clonezilla o
 
 ## Imprint Rescue ISO
 
-A lightweight KDE‑based rescue environment is available for full offline backup and restore, or when system partitions must remain unmounted.
+A lightweight Arch and KDE‑based rescue environment is available for full offline backup and restore, or when system partitions must remain unmounted. The ISO uses a modern Arch Linux kernel with broad hardware support, UEFI/BIOS boot, and standard driver coverage. It is designed for modern hardware; older systems may work but are untested (I don't have any older or BIOS-based systems to test it on). It includes network drivers and supports LAN and WiFi. Tested with NFS and SMB. Other network backends may work if they behave like a normal mounted filesystem (e.g., they appear as a normal directory), but they are not officially tested. 
 
 👉 https://github.com/jalongx/imprint_iso_kde
 
@@ -89,6 +90,23 @@ Anything supported by partclone, including:
 - f2fs  
 - and more  
 
+Encrypted volumes (e.g., LUKS) must be unlocked before use; Imprint backs up the underlying filesystem, not encrypted containers. LVM volumes work as long as the logical volume is active and mounted; Imprint backs up the filesystem inside the LV.
+
+---
+
+## Roadmap (toward 1.0 and beyond)
+
+Imprint is currently **version 0.92** — stable and fully usable, but still evolving.  
+Here’s what’s planned for the 1.0 milestone (and beyond):
+
+- **Unified `imprint` binary** (merge backup + restore into one tool)  
+- **Command‑line switches** for automation and headless use  
+- **Multi‑partition backup/restore**  
+- **Verification‑only mode** (validate images without restoring)  
+- **Improved documentation**  
+
+Development is active, and the 1.0 milestone is focused on stability, polish, and core feature completeness rather than rapid expansion. The transition to 1.0 will not break existing images; backward compatibility is a priority.
+
 ---
 
 ## Screenshots
@@ -113,24 +131,9 @@ Anything supported by partclone, including:
 
 ---
 
-## Roadmap (toward 1.0 and beyond)
-
-Imprint is currently **version 0.92** — stable and fully usable, but still evolving.  
-Here’s what’s planned for the 1.0 milestone:
-
-- **Unified `imprint` binary** (merge backup + restore into one tool)  
-- **Command‑line switches** for automation and headless use  
-- **Multi‑partition backup/restore**  
-- **Verification‑only mode** (validate images without restoring)  
-- **Improved documentation**  
-- **Optional supporter perks** (prebuilt ISOs, convenience features)  
-
----
-
 ## Disclaimer
 
-Working with disk images is inherently risky. If you are uncertain about any
-step, please ask for help before proceeding.
+Imprint includes multiple safety checks and integrity safeguards, but disk imaging always carries inherent risk. If you are uncertain about any step, please ask for help before proceeding.
 
 Imprint is provided without any warranty. I take no responsibility for any
 damage, data loss, or other consequences that may occur to your partitions,

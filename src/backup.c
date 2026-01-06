@@ -1,7 +1,6 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include <time.h>   // optional but recommended to include explicitly
-
+#include <time.h>
 #include "backup.h"
 #include "utils.h"
 #include "ui.h"

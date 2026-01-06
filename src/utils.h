@@ -2,7 +2,7 @@
 #define UTILS_H
 
 #include <stdbool.h>
-#include <stddef.h>   // <-- add this
+#include <stddef.h>
 
 /*
  * Basic command execution utilities and dependency checks.

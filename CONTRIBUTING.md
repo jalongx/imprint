@@ -85,7 +85,7 @@ If your contribution includes third‑party code, ensure it is GPL‑compatible.
 If you discover a security issue:
 - Do **not** open a public issue  
 - Email the project owner directly at:  
-  **<your email here>**
+  jalong@live.ca
 
 Responsible disclosure helps protect users.
 
