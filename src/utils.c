@@ -113,7 +113,7 @@ void gx_ensure_terminal(int argc, char **argv)
     }
 
     fprintf(stderr,
-            "GhostX needs a terminal to display progress, but no terminal emulator was found.\n");
+            "Imprint needs a terminal to display progress, but no terminal emulator was found.\n");
     exit(1);
 }
 
@@ -447,7 +447,7 @@ void check_core_dependencies(void)
     if (!ok)
         exit(EXIT_FAILURE);
 
-    printf(GREEN "\nAll dependencies installed.\n\n" RESET);
+    printf(GREEN "All dependencies installed.\n\n" RESET);
 }
 
 /* ---------------------------------------------------------

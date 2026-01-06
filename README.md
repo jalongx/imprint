@@ -1,14 +1,20 @@
 # Imprint Disk Imager
 
-Imprint is a modern, Linux‑native front-end for partclone that can be used from inside your operating system.
 
-- It can backup or restore unmounted partitions while you are using your everyday operating system.
-- You can boot to another linux installation on your computer to backup/restore system partitions that cannot be unmounted.
+Imprint provides a safe and fast way to back up and restore partitions using partclone with a simple Zenity‑based UI.
+
+- You can backup or restore unmounted **non-system** partitions from withing your linux operating system.
+- You can backup and restore **system partitions** by booting with the Imprint Rescue ISO or booting to another linux installation on the same computer.
 - It only backs up the data on the partition -- no raw images that are the same size as the partition you're backing up.
 - Can be run from the command line or from an icon on your desktop.
-- It provides a rescue iso that you can boot from to do partition management, backups, restores or bare metal installs from image.
 
-It provides a clean, safe, and fast way to back up and restore partitions using partclone with a simple Zenity‑based UI and strong integrity guarantees.
+THIS IS BETA SOFTWARE. It works fine on my rather complex system but there are bound to be limitations and errors on other system setups.
+
+- It has only been tested on the follwing filesystems: Ext2/3/4, BTRFS, NTFS, FAT16/32/exFAT.
+- It has only been tested on NFS and SMB network filesystems.
+- It inherits partclone's limitations: you cannot restore an image to a partition smaller than the original.
+- It cannot (yet) restore an image to a bare drive. You have to create a partition big enough for it. The original partition size can be found in the metadata file accompanying the image.
+- It currently backs up only one partition at a time. If you want to back up 3 partitions, you'll have to run it 3 times.
 
 ---
 
@@ -56,8 +62,6 @@ This makes Imprint a safe, modern alternative to classic tools like Clonezilla o
 A lightweight KDE‑based rescue environment is available for full offline backup and restore, or when system partitions must remain unmounted.
 
 👉 https://github.com/jalongx/imprint_iso_kde
-
-If you can’t afford to donate but need a prebuilt ISO, open an issue and I’ll make one available.
 
 ---
 
@@ -109,7 +113,7 @@ Anything supported by partclone, including:
 
 ---
 
-## Roadmap (toward 1.0)
+## Roadmap (toward 1.0 and beyond)
 
 Imprint is currently **version 0.92** — stable and fully usable, but still evolving.  
 Here’s what’s planned for the 1.0 milestone:
@@ -118,25 +122,8 @@ Here’s what’s planned for the 1.0 milestone:
 - **Command‑line switches** for automation and headless use  
 - **Multi‑partition backup/restore**  
 - **Verification‑only mode** (validate images without restoring)  
-- **X11-based ISO** for older computers  
 - **Improved documentation**  
 - **Optional supporter perks** (prebuilt ISOs, convenience features)  
-
----
-
-## Supporting the Project
-
-Imprint is built and maintained by a retired senior on a fixed income living in uncertain times.  
-If this tool helps you, or if you’d like to support the continued development toward 1.0, consider becoming a sponsor.
-
-Your support helps fund:
-
-- ongoing maintenance  
-- hardware testing  
-- rescue ISO improvements  
-- future features from the roadmap  
-
-Supporters may also receive access to **prebuilt rescue ISOs** and other convenience perks as a thank‑you.
 
 ---
 
