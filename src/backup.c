@@ -1,6 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include <time.h>
 #include "backup.h"
 #include "utils.h"
 #include "ui.h"
@@ -14,7 +13,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-
+#include <time.h>
 
 /* Map compression string to compressor command */
 static const char *get_compressor_cmd(const char *comp)
@@ -118,7 +117,6 @@ static char *join_path(const char *dir, const char *filename)
     return path;
 }
 
-/* Run partclone + gzip pipeline. */
 /* Run partclone + compressor + streaming checksum pipeline. */
 bool run_backup_pipeline(const char *backend,
                          const char *device,

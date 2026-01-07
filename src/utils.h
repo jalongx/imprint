@@ -21,7 +21,7 @@ void check_core_dependencies(void);
 /*
  * Filesystem / partition helpers.
  *
- * These are early helpers we’ll expand:
+ * These are early helpers:
  * - detect filesystem type for a given device
  * - later: lsblk parsing to show labels, sizes, etc.
  */

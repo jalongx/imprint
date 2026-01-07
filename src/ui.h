@@ -5,7 +5,7 @@
 
 /*
  * Zenity-based UI functions.
- * These provide human-friendly dialogs for:
+ * These provide dialogs for:
  *  - selecting a backup directory
  *  - selecting a partition (with labels, fs type, size, mount status)
  *  - entering a filename

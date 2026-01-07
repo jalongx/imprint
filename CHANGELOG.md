@@ -52,7 +52,7 @@ v0.9.0, 2-Jan-2026 - Added ability to backup and restore image file in user-defi
 
 v0.9.1, 3-Jan-2026 - Changed backup pipeline logic for filesystems that don't support FIFO.
 - Imprint now supports saving backups on filesystems that don't suport FIFO.
-- Now supports Fat32, NTFS, EXFAT, SMB
+- Now supports saving backup images on Fat32, NTFS, EXFAT, SMB.
 
-v0.9.2, 4-Jan-2026 - User interface enhancements.
+v0.9.2, 4-Jan-2026 - User interface enhancements. Project made "Public" on github.com
 

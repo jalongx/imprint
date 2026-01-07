@@ -66,7 +66,7 @@ static void parse_config_line(char *line)
 
 /* ---------------------------------------------------------
  * Resolve config directory using XDG spec
- * Result: out = ".../ghostx"
+ * Result: out = ".../imprint"
  * --------------------------------------------------------- */
 static void get_config_dir(char *out, size_t out_len)
 {
