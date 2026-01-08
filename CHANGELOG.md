@@ -56,7 +56,7 @@ v0.9.1, 3-Jan-2026 - Changed backup pipeline logic for filesystems that don't su
 
 v0.9.2, 4-Jan-2026 - User interface enhancements. Project made "Public" on github.com
 
-v0.9.21 — Fixed checksum mismatch between generated checksums and the values in the .json and .sha256
+v0.9.21, 8-Jan-2026 - Fixed checksum mismatch between generated checksums and the values in the .json and .sha256
 - Moved checksum tee to after compressor to ensure checksum is computed over compressed stream
 - Verified chunked reconstruction matches .sha256 and JSON metadata
 - Added chunk verification script for manual integrity checks
