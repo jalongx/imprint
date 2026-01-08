@@ -117,6 +117,7 @@ static char *join_path(const char *dir, const char *filename)
     return path;
 }
 
+/* Run partclone + compressor + checksum pipeline. */
 /* Run partclone + compressor + streaming checksum pipeline. */
 bool run_backup_pipeline(const char *backend,
                          const char *device,
@@ -156,7 +157,7 @@ bool run_backup_pipeline(const char *backend,
              partclone_cmd);
 
     /* --------------------------------------------------
-     * Determine where FIFOs should live.
+     * Determine FIFO directory (workdir override or output dir)
      * -------------------------------------------------- */
     char fifo_dir[1024];
 
@@ -182,7 +183,6 @@ bool run_backup_pipeline(const char *backend,
      * ------------------------------- */
     char checksum_fifo[1024];
 
-    /* Safe, warning‑free construction */
     size_t need = strlen(fifo_dir) + strlen("/sha256pipe.fifo") + 1;
     if (need >= sizeof(checksum_fifo)) {
         ui_error("FIFO path too long.");
@@ -224,32 +224,39 @@ bool run_backup_pipeline(const char *backend,
     }
 
     /*
-     * 3. Build the main pipeline.
+     * 3. Build the corrected streaming pipeline.
+     *
+     * Correct order:
+     *   partclone → compressor → tee → checksum + file/chunks
+     *
+     * This ensures the checksum matches the actual compressed output.
      */
     char full_cmd[4096];
 
     if (gx_config.chunk_size_mb > 0) {
+        /* Chunked output */
         snprintf(full_cmd, sizeof(full_cmd),
                  "set -o pipefail; "
-                 "%s | tee '%s' | %s | split -b %dM -d -a 3 - '%s.'",
+                 "%s | %s | tee '%s' | "
+                 "split -b %dM -d -a 3 - '%s.'",
                  pk_partclone,
-                 checksum_fifo,
                  comp_cmd,
+                 checksum_fifo,
                  gx_config.chunk_size_mb,
                  output_path);
     } else {
+        /* Single file output */
         snprintf(full_cmd, sizeof(full_cmd),
                  "set -o pipefail; "
-                 "%s | tee '%s' | %s > '%s'",
+                 "%s | %s | tee '%s' > '%s'",
                  pk_partclone,
-                 checksum_fifo,
                  comp_cmd,
+                 checksum_fifo,
                  output_path);
     }
 
-     fprintf(stderr,
+    fprintf(stderr,
             YELLOW "Starting partclone with streaming checksum using the command...\n" RESET);
-
     fprintf(stderr,
             GREEN "     %s\n\n" RESET,
             full_cmd);
@@ -270,12 +277,9 @@ bool run_backup_pipeline(const char *backend,
     if (rc != -1)
         exit_code = WEXITSTATUS(rc);
 
-    // fprintf(stderr,
-    //         YELLOW "DEBUG: system() returned rc=%d, exit_code=%d, sha_status=%d\n" RESET,
-    //         rc, exit_code, sha_status);
-
     if (rc == -1 || exit_code != 0) {
 
+        /* On failure, remove image and checksum */
         unlink(output_path);
 
         char sha_file[1024];
@@ -294,10 +298,12 @@ bool run_backup_pipeline(const char *backend,
         return false;
     }
 
+    /* 7. Write metadata based on logical output_path (base name) */
     write_metadata(output_path, device, fs_type, backend, gx_config.compression);
 
     return true;
 }
+
 
 bool backup_run_interactive(void)
 {
