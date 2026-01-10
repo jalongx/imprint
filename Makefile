@@ -1,29 +1,34 @@
-CC      = gcc
-CFLAGS  = -Wall -Wextra -O2
-LDFLAGS = -lcrypto
+CC := gcc
 
-SRC_DIR = src
-BUILD_DIR = build
+# Architecture-safe baseline for maximum compatibility
+CFLAGS := -Wall -Wextra -O2 -march=x86-64-v2 -mtune=generic
+CFLAGS += -frecord-gcc-switches
+CFLAGS += -DIMPRINT_BUILD_FLAGS="\"$(CFLAGS)\""
 
-SRCS_COMMON = \
+LDFLAGS := -lcrypto
+
+SRC_DIR := src
+BUILD_DIR := build
+
+SRCS_COMMON := \
     $(SRC_DIR)/utils.c \
     $(SRC_DIR)/ui.c \
     $(SRC_DIR)/config.c
 
-SRCS_BACKUP = \
+SRCS_BACKUP := \
     $(SRC_DIR)/main.c \
     $(SRC_DIR)/backup.c
 
-SRCS_RESTORE = \
+SRCS_RESTORE := \
     $(SRC_DIR)/main_restore.c \
     $(SRC_DIR)/restore.c
 
-OBJS_COMMON   = $(SRCS_COMMON:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
-OBJS_BACKUP   = $(SRCS_BACKUP:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
-OBJS_RESTORE  = $(SRCS_RESTORE:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
+OBJS_COMMON  := $(SRCS_COMMON:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
+OBJS_BACKUP  := $(SRCS_BACKUP:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
+OBJS_RESTORE := $(SRCS_RESTORE:$(SRC_DIR)/%.c=$(BUILD_DIR)/%.o)
 
-TARGET_BACKUP  = imprintb
-TARGET_RESTORE = imprintr
+TARGET_BACKUP  := imprintb
+TARGET_RESTORE := imprintr
 
 all: $(TARGET_BACKUP) $(TARGET_RESTORE)
 
@@ -40,4 +45,14 @@ $(TARGET_RESTORE): $(OBJS_COMMON) $(OBJS_RESTORE)
 clean:
 	rm -rf $(BUILD_DIR) $(TARGET_BACKUP) $(TARGET_RESTORE)
 
-.PHONY: all clean
+# Quick sanity check: ensure no v3/v4 instructions slipped in
+verify-isa:
+	@echo "Checking for AVX/AVX2/FMA/BMI/MOVBE instructions..."
+	@if objdump -d $(TARGET_BACKUP) | grep -E 'avx|avx2|fma|bmi|movbe' ; then \
+        echo "ERROR: v3/v4 instructions detected!" ; \
+		exit 1 ; \
+	else \
+		echo "OK: No v3/v4 instructions found in $(TARGET_BACKUP)" ; \
+	fi
+
+.PHONY: all clean verify-isa
