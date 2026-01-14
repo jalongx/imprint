@@ -1,6 +1,7 @@
 #include "ui.h"
 #include "utils.h"
 #include "config.h"
+#include "colors.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -10,27 +11,32 @@
 
 void ui_error(const char *message)
 {
-    char cmd[2048];
+    if (gx_no_gui) {
+        fprintf(stderr, YELLOW "ERROR: %s\n" RESET, message);
+        return;
+    }
 
+    char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              "zenity --error --title='Error' --text='%s' 2>/dev/null",
              message);
-
     system(cmd);
 }
 
-
-/* Show an info dialog */
 void ui_info(const char *message)
 {
-    char cmd[2048];
+    if (gx_no_gui) {
+        fprintf(stderr, "%s\n", message);
+        return;
+    }
 
+    char cmd[2048];
     snprintf(cmd, sizeof(cmd),
              "zenity --info --title='Info' --text='%s' 2>/dev/null",
              message);
-
     system(cmd);
 }
+
 
 /* Directory chooser */
 char *ui_choose_directory(void)

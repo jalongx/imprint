@@ -5,6 +5,8 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <pwd.h>
+#include <unistd.h>
 
 /* ---------------------------------------------------------
  * Global configuration instance
@@ -66,17 +68,36 @@ static void parse_config_line(char *line)
 
 /* ---------------------------------------------------------
  * Resolve config directory using XDG spec
- * Result: out = ".../imprint"
+ * User + sudo → use invoking user's config
+ * Real root   → use /root
  * --------------------------------------------------------- */
 static void get_config_dir(char *out, size_t out_len)
 {
     const char *xdg  = getenv("XDG_CONFIG_HOME");
     const char *home = getenv("HOME");
 
+    /* -----------------------------------------------------
+     * If running as root via sudo, use the invoking user's
+     * home directory instead of /root.
+     * ----------------------------------------------------- */
+    if (geteuid() == 0) {
+        const char *sudo_user = getenv("SUDO_USER");
+        if (sudo_user && sudo_user[0] != '\0') {
+            struct passwd *pw = getpwnam(sudo_user);
+            if (pw && pw->pw_dir && pw->pw_dir[0] != '\0') {
+                /* Override HOME and ignore XDG_CONFIG_HOME */
+                home = pw->pw_dir;
+                xdg  = NULL;
+            }
+        }
+    }
+
+    /* -----------------------------------------------------
+     * XDG_CONFIG_HOME takes priority if set
+     * ----------------------------------------------------- */
     if (xdg && xdg[0] != '\0') {
-        /* xdg + "/imprint" */
-        size_t xlen = strlen(xdg);
         const char suffix[] = "/imprint";
+        size_t xlen = strlen(xdg);
         size_t slen = sizeof(suffix) - 1;
 
         if (xlen + slen + 1 > out_len) {
@@ -90,10 +111,12 @@ static void get_config_dir(char *out, size_t out_len)
         return;
     }
 
+    /* -----------------------------------------------------
+     * HOME fallback: ~/.config/imprint
+     * ----------------------------------------------------- */
     if (home && home[0] != '\0') {
-        /* home + "/.config/imprint" */
-        size_t hlen = strlen(home);
         const char suffix[] = "/.config/imprint";
+        size_t hlen = strlen(home);
         size_t slen = sizeof(suffix) - 1;
 
         if (hlen + slen + 1 > out_len) {
@@ -107,10 +130,13 @@ static void get_config_dir(char *out, size_t out_len)
         return;
     }
 
-    /* Last‑ditch fallback */
+    /* -----------------------------------------------------
+     * Last‑ditch fallback
+     * ----------------------------------------------------- */
     strncpy(out, "/tmp/imprint", out_len - 1);
     out[out_len - 1] = '\0';
 }
+
 
 
 /* ---------------------------------------------------------
@@ -173,8 +199,9 @@ void ghostx_config_save(void)
     get_config_dir(dir, sizeof(dir));
 
     /* Try to create directory — ignore errors except EROFS */
-    if (mkdir(dir, 0700) != 0 && errno == EROFS) {
-        return;  /* ISO or immutable system — silently skip saving */
+    if (mkdir(dir, 0700) != 0 && errno != EEXIST && errno != EROFS) {
+        /* If mkdir failed for reasons other than "already exists" or read-only FS, bail out */
+        return;
     }
 
     char path[2048];
@@ -184,7 +211,7 @@ void ghostx_config_save(void)
 
     FILE *fp = fopen(path, "w");
     if (!fp) {
-        return; /* read‑only FS or permission issue — safe to ignore */
+        return; /* read-only FS or permission issue — safe to ignore */
     }
 
     fprintf(fp,
@@ -212,4 +239,19 @@ void ghostx_config_save(void)
     fprintf(fp, "chunk_size_mb=%d\n", gx_config.chunk_size_mb);
 
     fclose(fp);
+
+    /* ---------------------------------------------------------
+     * If running under sudo, ensure the config file is owned
+     * by the invoking user rather than root.
+     * --------------------------------------------------------- */
+    if (geteuid() == 0) {
+        const char *sudo_user = getenv("SUDO_USER");
+        if (sudo_user && sudo_user[0] != '\0') {
+            struct passwd *pw = getpwnam(sudo_user);
+            if (pw) {
+                /* Change ownership to the invoking user */
+                chown(path, pw->pw_uid, pw->pw_gid);
+            }
+        }
+    }
 }

@@ -18,6 +18,7 @@
 #include <sys/statfs.h>
 #include <errno.h>
 
+bool gx_no_gui = false;
 
 void ghostx_print_banner(const char *program_name)
 {
@@ -511,3 +512,37 @@ bool gx_test_fifo_capability(const char *dir)
             return false;
     }
 }
+
+bool gx_is_partition_mounted(const char *device)
+{
+    if (!device || device[0] == '\0')
+        return false;
+
+    FILE *fp = fopen("/proc/self/mounts", "r");
+    if (!fp)
+        return false;
+
+    char line[1024];
+    bool mounted = false;
+
+    while (fgets(line, sizeof(line), fp)) {
+        /*
+         * /proc/self/mounts format:
+         *   <source> <target> <fstype> <options> <dump> <pass>
+         * we only care about <source>, which is the device path.
+         */
+        char src[256] = {0};
+
+        if (sscanf(line, "%255s", src) != 1)
+            continue;
+
+        if (strcmp(src, device) == 0) {
+            mounted = true;
+            break;
+        }
+    }
+
+    fclose(fp);
+    return mounted;
+}
+

@@ -49,4 +49,8 @@ bool gx_test_fifo_capability(const char *dir);
 
 extern char gx_workdir_override[1024];
 
+extern bool gx_no_gui;
+
+bool gx_is_partition_mounted(const char *device);
+
 #endif /* UTILS_H */

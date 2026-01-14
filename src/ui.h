@@ -43,5 +43,4 @@ char *ui_choose_image_file(void);
 
 char *ui_choose_partition_with_title(const char *title, const char *text);
 
-
 #endif /* UI_H */
