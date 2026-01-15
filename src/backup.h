@@ -94,4 +94,6 @@ bool run_backup_pipeline(const char *backend,
                          const char *compressor,
                          int chunk_mb);
 
+void print_backup_usage(void);
+
 #endif /* BACKUP_H */

@@ -21,6 +21,35 @@
 #include <fcntl.h>
 #include <dirent.h>
 
+void print_backup_usage(void)
+{
+    fprintf(stderr,
+            YELLOW "\nUsage:\n"
+            WHITE  "  imprintb --source <device> --target <image> [options]\n"
+                   "\n"
+            YELLOW "Required arguments:\n"
+            WHITE  "  --source <device>       Block device to back up (e.g. /dev/sda3, /dev/mapper/cryptroot)\n"
+                   "  --target <path>         Output image path (without extension)\n"
+                   "\n"
+            YELLOW "Options:\n"
+            WHITE  "  --compress <type>       Compression: lz4, zstd, gzip\n"
+                   "  --chunk <MB>            Split output into chunks of <MB> each (0 = no chunking)\n"
+                   "  --help                  Show this help message and exit\n"
+                   "\n"
+            YELLOW "Positional form (equivalent):\n"
+            WHITE  "  imprintb <device> <image>\n"
+                   "\n"
+            YELLOW "Examples:\n"
+            WHITE  "  imprintb --source /dev/sda3 --target /mnt/backup/system\n"
+                   "  imprintb --source /dev/mapper/cryptroot --target /mnt/backup/root --compress zstd --chunk 4096\n"
+                   "  imprintb /dev/nvme0n1p5 /backup/home\n"
+                   "\n"
+            YELLOW "Notes:\n"
+            WHITE  "  - The source device must not be mounted.\n"
+                   "  - Encrypted LUKS volumes must be unlocked before use (e.g. via cryptsetup).\n"
+                   "  - The target image should not include an extension; Imprint adds one automatically.\n" RESET
+    );
+}
 
 bool parse_backup_cli_args(int argc, char **argv, BackupCLIArgs *out)
 {
@@ -39,6 +68,12 @@ bool parse_backup_cli_args(int argc, char **argv, BackupCLIArgs *out)
 
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
+
+        if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
+            print_backup_usage();
+            out->parse_error = false;   /* not an error */
+            return false;               /* signal: do NOT run CLI or GUI */
+        }
 
         if (arg[0] == '-')
             saw_cli_flag = true;
@@ -122,6 +157,14 @@ bool parse_backup_cli_args(int argc, char **argv, BackupCLIArgs *out)
         }
     }
 
+    /* If positional args were used, require both */
+    if (positional_count == 1) {
+        fprintf(stderr, RED "ERROR" RESET ": missing target path\n");
+        out->parse_error = true;
+        return false;
+    }
+
+    /* If neither source nor target was provided → GUI mode */
     if (!out->source && !out->target)
         return false;
 
@@ -249,8 +292,7 @@ bool run_backup_pipeline(const char *backend,
     /* Require root privileges for partclone */
     if (euid != 0) {
         if (gx_no_gui) {
-            ui_error(RED "This operation requires root privileges.\n"
-            "Please run Imprint with sudo." RESET);
+            ui_error(RED "This operation requires root privileges. Please run Imprint with sudo." RESET);
             return false;
         }
         /* GUI mode: continue; partclone will be wrapped in pkexec below */
@@ -414,22 +456,19 @@ bool run_backup_pipeline(const char *backend,
 
         ui_error(
             "Backup failed.\n\n"
-            "Partclone reported an error (often caused by a dirty NTFS volume).\n"
+            "Partclone reported an error (shown on terminal output).\n"
             "No backup image was created.\n\n"
-            "If this is an NTFS partition, boot into Windows and run:\n"
-            "    chkdsk /f\n"
-            "Then try again."
         );
 
         return false;
     }
 
     /* 7. Write metadata using effective compressor */
-    write_metadata(output_path, device, fs_type, backend, compressor);
+    write_metadata(output_path, device, fs_type, backend, compressor, chunk_mb);
+
 
     return true;
 }
-
 
 bool backup_run_interactive(void)
 {
@@ -668,7 +707,6 @@ bool backup_run_cli(const char *device,
                     int chunk_mb)
 {
     (void)compressor;
-    // (void)chunk_mb;  /* now used */
 
     /* ---------------------------------------------
      * Start timing
@@ -686,7 +724,7 @@ bool backup_run_cli(const char *device,
     }
 
     /* ---------------------------------------------
-     * Reject mounted source partitions (CLI parity with GUI)
+     * Reject mounted source partitions
      * --------------------------------------------- */
     if (gx_is_partition_mounted(device)) {
         ui_error(RED "The source partition is mounted and cannot be backed up." RESET);
@@ -703,11 +741,9 @@ bool backup_run_cli(const char *device,
     }
 
     /* ---------------------------------------------
-     * Normalize target filename: always append
-     * .img.<ext> based on effective compression.
+     * Normalize target filename
      * --------------------------------------------- */
     char normalized_path[2048];
-
     const char *ext = get_compression_ext(gx_config.compression);
 
     if (slash) {
@@ -820,61 +856,77 @@ bool backup_run_cli(const char *device,
      * --------------------------------------------- */
     off_t file_size = 0;
     off_t alloc_size = 0;
+    int chunk_count = 0;
 
     if (chunk_mb > 0) {
-        /* Chunked mode: sum all split chunks with prefix "basename." */
+        /* Chunked mode: count sequential chunk files: base.000, base.001, ... */
         const char *base = strrchr(output_path, '/');
         base = base ? base + 1 : output_path;
 
-        /* Build prefix = basename + "." safely */
+        /* Build prefix "<basename>." */
         char prefix[1024];
         size_t blen = strlen(base);
 
-        if (blen >= sizeof(prefix) - 2) {
-            blen = sizeof(prefix) - 2;  /* leave room for "." and "\0" */
-        }
+        if (blen >= sizeof(prefix) - 2)
+            blen = sizeof(prefix) - 2;
 
         memcpy(prefix, base, blen);
         prefix[blen] = '.';
         prefix[blen + 1] = '\0';
 
-        DIR *d = opendir(dir);
-        if (d) {
-            struct dirent *de;
-            size_t plen = strlen(prefix);
+        /* Count chunks numerically (GUI‑compatible logic) */
+        for (unsigned i = 0; i < 1000; i++) {
 
-            while ((de = readdir(d)) != NULL) {
-                if (strncmp(de->d_name, prefix, plen) == 0) {
-                    /* Expect names like: base.000, base.001, ... */
-                    char chunk_path[2048];
-                    snprintf(chunk_path, sizeof(chunk_path),
-                             "%s/%s", dir, de->d_name);
+            /* Build chunk path safely */
+            char chunk_path[2048];
+            snprintf(chunk_path, sizeof(chunk_path), "%s/%s", dir, prefix);
 
-                    if (stat(chunk_path, &st) == 0) {
-                        file_size += st.st_size;
-                        alloc_size += st.st_blocks * 512;
-                    }
-                }
+            /* Append the numeric suffix safely */
+            char suffix[8];
+            snprintf(suffix, sizeof(suffix), "%03u", i);
+
+            strncat(chunk_path, suffix,
+                    sizeof(chunk_path) - strlen(chunk_path) - 1);
+
+            /* Stop at first missing chunk */
+            if (stat(chunk_path, &st) != 0) {
+                break;
             }
-            closedir(d);
+
+            file_size += st.st_size;
+            alloc_size += st.st_blocks * 512;
+            chunk_count++;
         }
     } else {
-        /* Single-file mode: stat the base output_path */
+        /* Single-file mode */
         if (stat(output_path, &st) == 0) {
             file_size = st.st_size;
             alloc_size = st.st_blocks * 512;
         }
     }
 
+
+    /* ---------------------------------------------
+     * Build summary strings
+     * --------------------------------------------- */
     char size_str[64], alloc_str[64];
-    snprintf(size_str, sizeof(size_str),
-             "%.2f MB", (double)file_size / (1024.0 * 1024.0));
+
+    double size_mb = (double)file_size / (1024.0 * 1024.0);
+
+    if (chunk_mb > 0 && chunk_count > 0) {
+        snprintf(size_str, sizeof(size_str),
+                 "%.2f MB (%d chunks)", size_mb, chunk_count);
+    } else {
+        snprintf(size_str, sizeof(size_str),
+                 "%.2f MB", size_mb);
+    }
+
     snprintf(alloc_str, sizeof(alloc_str),
              "%.2f MB", (double)alloc_size / (1024.0 * 1024.0));
 
     double mb_per_sec = 0.0;
     if (duration_sec > 0)
-        mb_per_sec = (file_size / (1024.0 * 1024.0)) / duration_sec;
+        mb_per_sec = size_mb / duration_sec;
 
     /* ---------------------------------------------
      * Save config (backup_dir) — GUI only
@@ -896,24 +948,13 @@ bool backup_run_cli(const char *device,
     char sha_path[2048];
     char meta_path[2048];
 
-    size_t olen = strlen(output_path);
-    size_t need = olen + strlen(".sha256") + 1;
+    /* Build sha256 path safely */
+    snprintf(sha_path, sizeof(sha_path), "%s", output_path);
+    strncat(sha_path, ".sha256", sizeof(sha_path) - strlen(sha_path) - 1);
 
-    if (need < sizeof(sha_path)) {
-        memcpy(sha_path, output_path, olen);
-        memcpy(sha_path + olen, ".sha256", 8);
-    } else {
-        snprintf(sha_path, sizeof(sha_path), "%s", output_path);
-    }
-
-    need = olen + strlen(".json") + 1;
-
-    if (need < sizeof(meta_path)) {
-        memcpy(meta_path, output_path, olen);
-        memcpy(meta_path + olen, ".json", 6);
-    } else {
-        snprintf(meta_path, sizeof(meta_path), "%s", output_path);
-    }
+    /* Build metadata path safely */
+    snprintf(meta_path, sizeof(meta_path), "%s", output_path);
+    strncat(meta_path, ".json", sizeof(meta_path) - strlen(meta_path) - 1);
 
     /* ---------------------------------------------
      * Print summary
@@ -948,5 +989,4 @@ bool backup_run_cli(const char *device,
 
     return true;
 }
-
 

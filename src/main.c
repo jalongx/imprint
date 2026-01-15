@@ -6,8 +6,25 @@
 #include "backup.h"
 #include "config.h"
 
+/* Forward declaration so we can call it early */
+void print_backup_usage(void);
+
 int main(int argc, char **argv)
 {
+    /* ---------------------------------------------------------
+     * EARLY HELP DETECTION
+     * Must run BEFORE banner, terminal spawning, or deps.
+     * --------------------------------------------------------- */
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
+            print_backup_usage();
+            return EXIT_SUCCESS;
+        }
+    }
+
+    /* ---------------------------------------------------------
+     * Normal startup path
+     * --------------------------------------------------------- */
     gx_ensure_terminal(argc, argv);
 
     ghostx_print_banner("Imprint Disk Imager");
@@ -20,8 +37,11 @@ int main(int argc, char **argv)
     bool parsed = parse_backup_cli_args(argc, argv, &args);
 
     /* Case 1: CLI args were provided but invalid */
-    if (!parsed && args.parse_error) {
-        return EXIT_FAILURE;
+    if (!parsed) {
+        if (args.parse_error) {
+            return EXIT_FAILURE;   /* syntax error */
+        }
+        /* No parse error + no help flag → GUI mode */
     }
 
     /* Case 2: Valid CLI mode */
@@ -38,10 +58,6 @@ int main(int argc, char **argv)
 
         /*
          * Determine effective chunk size (MB)
-         *
-         * Correct logic:
-         *   - If user explicitly provided --chunk <N>, use that value (even if N == 0)
-         *   - Otherwise fall back to config
          */
         int chunk_mb;
         if (args.chunk_override_set) {

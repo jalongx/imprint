@@ -280,7 +280,8 @@ bool write_metadata(const char *image_path,
                     const char *device,
                     const char *fs_type,
                     const char *backend,
-                    const char *compression)
+                    const char *compression,
+                    int effective_chunk_mb)
 {
     if (!image_path || !device || !fs_type || !backend)
         return false;
@@ -326,8 +327,8 @@ bool write_metadata(const char *image_path,
     get_partition_layout_json(parent_disk, layout_json, sizeof(layout_json));
 
     /* Chunking flags from config */
-    bool chunked = (gx_config.chunk_size_mb > 0);
-    int  chunk_size_mb = gx_config.chunk_size_mb;
+    bool chunked = (effective_chunk_mb > 0);
+    int  chunk_size_mb = effective_chunk_mb;
 
     FILE *fp = fopen(meta_path, "w");
     if (!fp)
