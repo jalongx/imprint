@@ -61,4 +61,18 @@ v0.9.21, 8-Jan-2026 - Fixed checksum mismatch between generated checksums and th
 - Verified chunked reconstruction matches .sha256 and JSON metadata
 - Added chunk verification script for manual integrity checks
 
+v0.9.3, 10-Jan-2026 — Added backup CLI functionality.
+- Introduced a dedicated command‑line interface for backup operations.
+- Allows fully headless backups without launching the GUI.
+- Unified messaging and progress output between CLI and GUI modes.
+- Improved scripting and automation support for advanced users.
+- Strengthened error reporting and exit‑code consistency for shell workflows.
+
+v0.9.35, 14-Jan-2026 — Added streaming sniffer for image inspection.
+- Implemented streaming partial decompression for zstd and lz4.
+- Detects Partclone textual headers without full decompression.
+- Extracts filesystem backend (BTRFS, EXT4, XFS, NTFS, FAT32, F2FS).
+- Provides full fallback behavior when metadata is missing or corrupted.
+- Establishes foundation for restore‑side validation and metadata‑free recovery.
+
 
