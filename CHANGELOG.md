@@ -75,4 +75,12 @@ v0.9.35, 14-Jan-2026 — Added streaming sniffer for image inspection.
 - Provides full fallback behavior when metadata is missing or corrupted.
 - Establishes foundation for restore‑side validation and metadata‑free recovery.
 
-
+v0.9.4, 15-Jan-2026 — Restore CLI + unified chunked‑restore architecture
+- Implemented full restore‑side command‑line interface, enabling headless restores without launching the GUI.
+- Normalized image‑path handling across CLI and GUI, including correct stripping of .000 suffixes for chunked images.
+- Added authoritative metadata loading during restore, ensuring consistent backend, compression, and partition‑size validation.
+- Introduced robust chunk‑set validation for both CLI and GUI restore paths, preventing restores when any chunk is missing or mismatched.
+- Unified restore logic between interactive and CLI modes, eliminating divergent behaviors and ensuring deterministic restore flow.
+- Simplified restore pipeline by deferring missing‑metadata fallback logic to a future branch.
+- Removed reliance on the experimental sniffer for restore decisions; partclone now provides authoritative filesystem‑size validation.
+- General cleanup and restructuring of restore.c for clarity, maintainability, and future feature expansion.

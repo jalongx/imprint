@@ -20,8 +20,9 @@ typedef struct {
     char compression[64];
     bool chunked;
     int chunk_count;
-    bool valid;
+    int chunk_size_mb;   // ← add this
 } MetadataInfo;
+
 
 /* -------------------------------------------------------------
  * Detect chunk suffix ".000".."999" and compute base path
@@ -62,6 +63,30 @@ get_image_base_and_chunked(const char *selected_path,
     }
 }
 
+static bool validate_chunk_set(const char *base, int chunk_count)
+{
+    if (chunk_count <= 1) {
+        return true;   // single-file image
+    }
+        char prefix[2048];
+    snprintf(prefix, sizeof(prefix), "%s.", base);
+
+    for (int i = 0; i < chunk_count; i++) {
+        char path[4096];
+        snprintf(path, sizeof(path), "%s%03d", prefix, i);
+
+        struct stat st;
+        if (stat(path, &st) != 0) {
+            fprintf(stderr,
+                    RED "Missing chunk: %s\n"
+                    "Restore aborted.\n" RESET,
+                    path);
+            return false;
+        }
+    }
+
+    return true;
+}
 
 /* -------------------------------------------------------------
  * Early-gate: load metadata or exit restore
@@ -83,14 +108,15 @@ load_metadata_or_exit(const char *image_base, MetadataInfo *meta)
     }
 
     memset(meta, 0, sizeof(*meta));
-    meta->valid = false;
 
     char line[512];
 
     while (fgets(line, sizeof(line), fp)) {
 
+        char *p;
+
         /* partition_size_bytes */
-        char *p = strstr(line, "\"partition_size_bytes\"");
+        p = strstr(line, "\"partition_size_bytes\"");
         if (p) {
             p = strchr(p, ':');
             if (p) meta->partition_size_bytes = atoll(p + 1);
@@ -150,16 +176,36 @@ load_metadata_or_exit(const char *image_base, MetadataInfo *meta)
             }
             continue;
         }
+
+        /* chunk_size_mb */
+        p = strstr(line, "\"chunk_size_mb\"");
+        if (p) {
+            p = strchr(p, ':');
+            if (p) meta->chunk_size_mb = atoi(p + 1);
+            continue;
+        }
+
+        /* chunk_count */
+        p = strstr(line, "\"chunk_count\"");
+        if (p) {
+            p = strchr(p, ':');
+            if (p) meta->chunk_count = atoi(p + 1);
+            continue;
+        }
     }
 
     fclose(fp);
 
+    /* Validate required fields */
     if (meta->partition_size_bytes > 0 && meta->backend[0] != '\0') {
-        meta->valid = true;
 
         /* default compression if missing */
         if (meta->compression[0] == '\0')
             strcpy(meta->compression, "lz4");
+
+        /* default chunk_count for single-file images */
+        if (!meta->chunked && meta->chunk_count < 1)
+            meta->chunk_count = 1;
 
         return true;
     }
@@ -193,10 +239,14 @@ restore_run_interactive(void)
                                sizeof(base_image),
                                &chunked_by_name);
 
-    /* 3. Load metadata (authoritative) */
+    /* 2. Load metadata (authoritative) */
     MetadataInfo meta;
-    if (!load_metadata_or_exit(base_image, &meta)) {
-        free(selected_path);
+    if (!load_metadata_or_exit(base_image, &meta))
+        return false;
+
+    /* 2a. Validate chunk set using normalized base path */
+    if (!validate_chunk_set(base_image, meta.chunk_count)) {
+        ui_error("Missing chunk(s). Restore aborted.");
         return false;
     }
 
@@ -540,6 +590,12 @@ bool restore_run_cli(const char *image_path,
     }
 
     /* ---------------------------------------------------------
+     * 2a. Validate chunk set using normalized base path
+     * --------------------------------------------------------- */
+    if (!validate_chunk_set(base_image, meta.chunk_count))
+        return false;
+
+    /* ---------------------------------------------------------
      * 3. Validate target device exists
      * --------------------------------------------------------- */
     struct stat st;
@@ -557,6 +613,7 @@ bool restore_run_cli(const char *image_path,
         fprintf(stderr, RED "ERROR:" WHITE " could not determine size of target partition.\n");
         return false;
     }
+
     /* ---------------------------------------------------------
      * Partclone cannot restore to a smaller partition.
      * This is a hard limitation and cannot be overridden.
@@ -571,7 +628,6 @@ bool restore_run_cli(const char *image_path,
                 tgt_bytes / 1e9);
         return false;
     }
-
 
     /* ---------------------------------------------------------
      * 5. Run restore pipeline
