@@ -8,257 +8,264 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <stdbool.h>
+#include <sys/stat.h>
 
-/* Detect chunk suffix ".000".."999" and compute base path */
-static void get_image_base_and_chunked(const char *selected_path,
-                                       char *base_path,
-                                       size_t base_len,
-                                       bool *chunked)
+/* -------------------------------------------------------------
+ * Metadata structure
+ * ------------------------------------------------------------- */
+typedef struct {
+    long long partition_size_bytes;
+    char backend[128];
+    char compression[64];
+    bool chunked;
+    int chunk_count;
+    bool valid;
+} MetadataInfo;
+
+/* -------------------------------------------------------------
+ * Detect chunk suffix ".000".."999" and compute base path
+ * ------------------------------------------------------------- */
+static void
+get_image_base_and_chunked(const char *selected_path,
+                           char *base_path,
+                           size_t base_len,
+                           bool *chunked)
 {
     *chunked = false;
 
     if (!selected_path || !base_path || base_len == 0)
         return;
 
-    size_t len = strlen(selected_path);
+    /* Copy full path first */
+    strncpy(base_path, selected_path, base_len - 1);
+    base_path[base_len - 1] = '\0';
 
-    /* Detect suffix .000 .. .999 */
+    /* ---------------------------------------------------------
+     * Detect chunk suffix .000 .. .999
+     * (Do NOT strip compression extensions here)
+     * --------------------------------------------------------- */
+    size_t len = strlen(base_path);
+
     if (len > 4 &&
-        selected_path[len - 4] == '.' &&
-        isdigit((unsigned char)selected_path[len - 3]) &&
-        isdigit((unsigned char)selected_path[len - 2]) &&
-        isdigit((unsigned char)selected_path[len - 1]))
+        base_path[len - 4] == '.' &&
+        isdigit((unsigned char)base_path[len - 3]) &&
+        isdigit((unsigned char)base_path[len - 2]) &&
+        isdigit((unsigned char)base_path[len - 1]))
     {
-        /* Strip the .DDD suffix */
-        size_t new_len = len - 4;
-        if (new_len >= base_len)
-            new_len = base_len - 1;
-
-        memcpy(base_path, selected_path, new_len);
-        base_path[new_len] = '\0';
-
+        /* Strip .DDD suffix */
+        base_path[len - 4] = '\0';
         *chunked = true;
     }
     else {
-        /* Not chunked — use as-is */
-        strncpy(base_path, selected_path, base_len - 1);
-        base_path[base_len - 1] = '\0';
         *chunked = false;
     }
 }
 
-/* Very simple metadata parser: read backend from <image>.json */
-static bool read_backend_from_metadata(const char *image_path,
-                                       char *backend,
-                                       size_t backend_len)
+
+/* -------------------------------------------------------------
+ * Early-gate: load metadata or exit restore
+ * ------------------------------------------------------------- */
+static bool
+load_metadata_or_exit(const char *image_base, MetadataInfo *meta)
 {
-    if (!image_path || !backend || backend_len == 0)
-        return false;
-
-    char meta_path[1024];
-    snprintf(meta_path, sizeof(meta_path), "%s.json", image_path);
-
-    FILE *fp = fopen(meta_path, "r");
-    if (!fp) {
-        fprintf(stderr, "DEBUG: could not open metadata file '%s'\n", meta_path);
-        return false;
-    }
-
-    char line[512];
-    bool found = false;
-
-    while (fgets(line, sizeof(line), fp)) {
-        char *p = strstr(line, "\"backend\"");
-        if (!p)
-            continue;
-
-        p = strchr(p, ':');
-        if (!p)
-            continue;
-        p = strchr(p, '"');
-        if (!p)
-            continue;
-        p++;
-
-        char *end = strchr(p, '"');
-        if (!end)
-            continue;
-
-        size_t len = (size_t)(end - p);
-        if (len >= backend_len)
-            len = backend_len - 1;
-
-        memcpy(backend, p, len);
-        backend[len] = '\0';
-        found = true;
-        break;
-    }
-
-    fclose(fp);
-
-    if (!found) {
-        fprintf(stderr, "DEBUG: backend not found in metadata '%s'\n", meta_path);
-    } else {
-        fprintf(stderr, YELLOW "Successfully determined backend from metadata: '%s'" RESET "\n", backend);
-    }
-
-    return found;
-}
-
-/* Read "chunked": true/false from metadata */
-static bool read_chunked_from_metadata(const char *image_base,
-                                       bool *chunked_out)
-{
-    if (!image_base || !chunked_out)
-        return false;
-
     char meta_path[1024];
     snprintf(meta_path, sizeof(meta_path), "%s.json", image_base);
 
     FILE *fp = fopen(meta_path, "r");
-    if (!fp)
-        return false;
-
-    char line[512];
-    bool found = false;
-
-    while (fgets(line, sizeof(line), fp)) {
-        char *p = strstr(line, "\"chunked\"");
-        if (!p)
-            continue;
-
-        p = strchr(p, ':');
-        if (!p)
-            continue;
-        p++;
-
-        /* Skip whitespace */
-        while (*p == ' ' || *p == '\t')
-            p++;
-
-        if (strncmp(p, "true", 4) == 0) {
-            *chunked_out = true;
-            found = true;
-            break;
-        }
-        if (strncmp(p, "false", 5) == 0) {
-            *chunked_out = false;
-            found = true;
-            break;
-        }
-    }
-
-    fclose(fp);
-    return found;
-}
-
-/* Read "chunk_size_mb": integer from metadata */
-static bool read_chunk_size_from_metadata(const char *image_base,
-                                          int *size_out)
-{
-    if (!image_base || !size_out)
-        return false;
-
-    char meta_path[1024];
-    snprintf(meta_path, sizeof(meta_path), "%s.json", image_base);
-
-    FILE *fp = fopen(meta_path, "r");
-    if (!fp)
-        return false;
-
-    char line[512];
-    bool found = false;
-
-    while (fgets(line, sizeof(line), fp)) {
-        char *p = strstr(line, "\"chunk_size_mb\"");
-        if (!p)
-            continue;
-
-        p = strchr(p, ':');
-        if (!p)
-            continue;
-        p++;
-
-        *size_out = atoi(p);
-        found = true;
-        break;
-    }
-
-    fclose(fp);
-    return found;
-}
-
-
-/* Read compression method from <image>.json */
-static bool read_compression_from_metadata(const char *image_path,
-                                           char *compression,
-                                           size_t compression_len)
-{
-    if (!image_path || !compression || compression_len == 0)
-        return false;
-
-    char meta_path[1024];
-    snprintf(meta_path, sizeof(meta_path), "%s.json", image_path);
-
-    FILE *fp = fopen(meta_path, "r");
     if (!fp) {
-        fprintf(stderr, "DEBUG: could not open metadata file '%s'\n", meta_path);
+        ui_error(
+            WHITE "This image does not have a matching metadata file.\n\n"
+            "       Imprint requires metadata to safely restore an image.\n"
+            "       Restore cannot continue." RESET
+        );
         return false;
     }
 
+    memset(meta, 0, sizeof(*meta));
+    meta->valid = false;
+
     char line[512];
-    bool found = false;
 
     while (fgets(line, sizeof(line), fp)) {
-        char *p = strstr(line, "\"compression\"");
-        if (!p)
-            continue;
 
-        p = strchr(p, ':');
-        if (!p)
+        /* partition_size_bytes */
+        char *p = strstr(line, "\"partition_size_bytes\"");
+        if (p) {
+            p = strchr(p, ':');
+            if (p) meta->partition_size_bytes = atoll(p + 1);
             continue;
-        p = strchr(p, '"');
-        if (!p)
+        }
+
+        /* backend */
+        p = strstr(line, "\"backend\"");
+        if (p) {
+            p = strchr(p, ':');
+            if (!p) continue;
+            p = strchr(p, '"');
+            if (!p) continue;
+            p++; /* now at first char of value */
+
+            char *end = strchr(p, '"');
+            if (!end) continue;
+
+            size_t len = (size_t)(end - p);
+            if (len >= sizeof(meta->backend))
+                len = sizeof(meta->backend) - 1;
+
+            memcpy(meta->backend, p, len);
+            meta->backend[len] = '\0';
             continue;
-        p++;
+        }
 
-        char *end = strchr(p, '"');
-        if (!end)
+        /* compression */
+        p = strstr(line, "\"compression\"");
+        if (p) {
+            p = strchr(p, ':');
+            if (!p) continue;
+            p = strchr(p, '"');
+            if (!p) continue;
+            p++; /* now at first char of value */
+
+            char *end = strchr(p, '"');
+            if (!end) continue;
+
+            size_t len = (size_t)(end - p);
+            if (len >= sizeof(meta->compression))
+                len = sizeof(meta->compression) - 1;
+
+            memcpy(meta->compression, p, len);
+            meta->compression[len] = '\0';
             continue;
+        }
 
-        size_t len = (size_t)(end - p);
-        if (len >= compression_len)
-            len = compression_len - 1;
-
-        memcpy(compression, p, len);
-        compression[len] = '\0';
-        found = true;
-        break;
+        /* chunked */
+        p = strstr(line, "\"chunked\"");
+        if (p) {
+            p = strchr(p, ':');
+            if (p) {
+                p++;
+                while (*p == ' ' || *p == '\t') p++;
+                meta->chunked = (strncmp(p, "true", 4) == 0);
+            }
+            continue;
+        }
     }
 
     fclose(fp);
 
-    if (!found) {
-        fprintf(stderr, "DEBUG: compression not found in metadata '%s'\n\n", meta_path);
-    } else {
-        fprintf(stderr, YELLOW "Successfully read compression from metadata: '%s'" RESET "\n",
-                compression);
+    if (meta->partition_size_bytes > 0 && meta->backend[0] != '\0') {
+        meta->valid = true;
+
+        /* default compression if missing */
+        if (meta->compression[0] == '\0')
+            strcpy(meta->compression, "lz4");
+
+        return true;
     }
 
-    return found;
+    ui_error(
+        "The metadata file exists but is incomplete or invalid.\n\n"
+        "Imprint requires valid metadata to safely restore an image.\n"
+        "Restore cannot continue."
+    );
+    return false;
 }
 
-/* Run selected decompressor + partclone restore pipeline. */
-bool run_restore_pipeline(const char *backend,
-                          const char *image_path,
-                          const char *device,
-                          const char *compression,
-                          bool chunked)
+
+/* -------------------------------------------------------------
+ * Interactive restore flow
+ * ------------------------------------------------------------- */
+bool
+restore_run_interactive(void)
 {
-    if (!backend || !image_path || !device)
+    /* 1. Choose image file */
+    char *selected_path = ui_choose_image_file();
+    if (!selected_path)
         return false;
 
-    /* Select decompressor */
+    /* 2. Normalize to base path */
+    char base_image[1024] = {0};
+    bool chunked_by_name = false;
+
+    get_image_base_and_chunked(selected_path,
+                               base_image,
+                               sizeof(base_image),
+                               &chunked_by_name);
+
+    /* 3. Load metadata (authoritative) */
+    MetadataInfo meta;
+    if (!load_metadata_or_exit(base_image, &meta)) {
+        free(selected_path);
+        return false;
+    }
+
+    /* 4. Choose target partition */
+    char *device = ui_choose_partition_with_title(
+        "Select destination partition for restore",
+        "Choose the partition that will be overwritten:"
+    );
+    if (!device) {
+        free(selected_path);
+        return false;
+    }
+
+    /* 5. Partition size check */
+    long long tgt_bytes = get_partition_size_bytes(device);
+    if (tgt_bytes <= 0) {
+        ui_error("Could not determine size of the target partition.");
+        free(device);
+        free(selected_path);
+        return false;
+    }
+
+    if (tgt_bytes < meta.partition_size_bytes) {
+        char msg[512];
+
+        snprintf(msg, sizeof(msg),
+                 "The target partition is smaller than the original partition.\n\n"
+                 "Original partition size: %.2f GB\n"
+                 "Target partition size: %.2f GB\n\n"
+                 "Partclone cannot restore an image to a smaller partition.\n"
+                 "Restore cannot continue.",
+                 meta.partition_size_bytes / 1e9,
+                 tgt_bytes / 1e9
+        );
+
+        ui_error(msg);
+
+        free(device);
+        free(selected_path);
+        return false;
+    }
+
+    /* 6. Run restore pipeline */
+    bool ok = run_restore_pipeline(
+        meta.backend,
+        base_image,
+        device,
+        meta.compression,
+        meta.chunked
+    );
+
+    free(device);
+    free(selected_path);
+    return ok;
+}
+
+bool
+run_restore_pipeline(const char *backend,
+                     const char *image_base,
+                     const char *device,
+                     const char *compression,
+                     bool chunked)
+{
+    if (!backend || !image_base || !device)
+        return false;
+
+    /* ---------------------------------------------------------
+     * 1. Select decompressor
+     * --------------------------------------------------------- */
     const char *decomp = NULL;
 
     if (compression && strcmp(compression, "gzip") == 0)
@@ -268,51 +275,103 @@ bool run_restore_pipeline(const char *backend,
     else
         decomp = "lz4 -dc";
 
-    fprintf(stderr,
-            YELLOW "Using decompressor: %s\n" RESET,
-            decomp);
+    fprintf(stderr, YELLOW "Using decompressor: %s\n" RESET, decomp);
 
+    /* ---------------------------------------------------------
+     * 2. Prepare image path for restore
+     *
+     * IMPORTANT:
+     *   - For chunked images: DO NOT strip compression extension.
+     *     The chunk files are named:
+     *         base.ext.000
+     *         base.ext.001
+     *         ...
+     *
+     *   - For single-file images: use the full filename exactly
+     *     as provided (with .zst/.lz4/.gz).
+     *
+     *   Metadata lookup ALWAYS uses the full filename.
+     * --------------------------------------------------------- */
+    char img_for_restore[1024];
+    strncpy(img_for_restore, image_base, sizeof(img_for_restore));
+    img_for_restore[sizeof(img_for_restore) - 1] = '\0';
+
+    /* ---------------------------------------------------------
+     * 3. Build restore command
+     * --------------------------------------------------------- */
     char cmd[3072];
 
     if (chunked) {
         /*
          * Chunked restore:
-         *   cat base.??? | decomp | backend -r -s - -o device
+         *   cat base.ext.??? | decomp | backend -r -s - -o device
          *
-         * image_path is the *base* path (no .000 suffix).
+         * Example:
+         *   cat nvme.img.zst.??? | zstd -dc | partclone.extfs -r -s - -o /dev/sda1
          */
         snprintf(cmd, sizeof(cmd),
                  "cat '%s'.??? | %s | %s -r -s - -o '%s'",
-                 image_path,
+                 img_for_restore,
                  decomp,
                  backend,
                  device);
     } else {
         /*
          * Single-file restore:
-         *   decomp base | backend -r -s - -o device
+         *   decomp base.ext | backend -r -s - -o device
+         *
+         * Example:
+         *   zstd -dc nvme.img.zst | partclone.extfs -r -s - -o /dev/sda1
          */
         snprintf(cmd, sizeof(cmd),
                  "%s '%s' | %s -r -s - -o '%s'",
                  decomp,
-                 image_path,
+                 image_base,
                  backend,
                  device);
     }
 
-    /* pkexec wrapper */
+    /* ---------------------------------------------------------
+     * 4. pkexec wrapper
+     * --------------------------------------------------------- */
     char pk_cmd[4096];
-    snprintf(pk_cmd, sizeof(pk_cmd),
-             "pkexec sh -c \"%s\"",
-             cmd);
+    uid_t euid = geteuid();
 
-    ui_info("Restore will now start.\n\n"
-    "Please monitor the terminal for partclone progress.\n"
-    "This will overwrite all data on the selected partition.");
+    /* ---------------------------------------------------------
+     * CLI mode: gx_no_gui == true
+     *   - Require sudo
+     *   - Do NOT use pkexec
+     * GUI mode:
+     *   - Use pkexec to elevate
+     * --------------------------------------------------------- */
+    if (gx_no_gui) {
+        /* CLI mode: require sudo */
+        if (euid != 0) {
+            fprintf(stderr,
+                   RED "ERROR:" WHITE " This operation requires root privileges.\n"
+                    "       Please run imprintr with sudo.\n\n");
+            return false;
+        }
+
+        /* CLI mode: run command directly */
+        snprintf(pk_cmd, sizeof(pk_cmd), "%s", cmd);
+
+    } else {
+        /* GUI mode: use pkexec */
+        snprintf(pk_cmd, sizeof(pk_cmd),
+                 "pkexec sh -c \"%s\"",
+                 cmd);
+    }
+
+    if (!gx_no_gui) {
+        ui_info("Restore will now start.\n\n"
+        "Please monitor the terminal for partclone progress.\n"
+        "This will overwrite all data on the selected partition.");
+    }
 
     fprintf(stderr,
-            YELLOW "Running elevated restore command:" RESET "\n"
-            "  " GREEN "%s" RESET "\n\n",
+            YELLOW "Running elevated restore command:\n" RESET
+            GREEN "  %s\n\n" RESET,
             pk_cmd);
 
     int rc = system(pk_cmd);
@@ -328,95 +387,207 @@ bool run_restore_pipeline(const char *backend,
     fprintf(stderr,
             WHITE "----------------------------------------\n" RESET);
 
+    if (!gx_no_gui) {
+        ui_info("Restore completed successfully.");
+    }
 
-    ui_info("Restore completed successfully.");
-    printf(YELLOW "\nDone.\n" RESET);
     return true;
 }
 
-bool restore_run_interactive(void)
+bool parse_restore_cli_args(int argc, char **argv, RestoreCLIArgs *out)
 {
-    /* 1. Choose image file. */
-    char *selected_path = ui_choose_image_file();
-    if (!selected_path) {
+    memset(out, 0, sizeof(*out));
+    out->cli_mode = false;
+    out->parse_error = false;
+    out->image = NULL;
+    out->target = NULL;
+    out->force = false;
+
+    bool saw_cli_flag = false;
+    int positional_count = 0;
+
+    for (int i = 1; i < argc; i++) {
+        const char *arg = argv[i];
+
+        /* Help */
+        if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
+            fprintf(stderr,
+                    YELLOW "Usage:" WHITE " imprintr --image <path> --target <device>\n"
+                           "       imprintr <image> <device>\n\n"
+                    YELLOW "Options:\n" WHITE
+                           "        --image <image file>      Path and filename of backup image (.img.zst, .img.lz4, .000, etc.)\n"
+                           "        --target <device>         Destination block device (e.g. /dev/nvme0n1p3)\n"
+                           // "  --force            Skip partition size safety check\n"
+                           "        --help                    Show this help message\n" RESET
+            );
+            out->parse_error = false;
+            out->cli_mode = false;
+            return true;   /* signal: help shown, suppress GUI and CLI */
+
+        }
+
+        /* CLI flags */
+        if (strcmp(arg, "--image") == 0) {
+            saw_cli_flag = true;
+            if (i + 1 < argc) {
+                out->image = argv[++i];
+                continue;
+            }
+            fprintf(stderr, RED "ERROR:" WHITE " --image requires a value\n");
+            out->parse_error = true;
+            return true;    /* CLI mode, but invalid */
+        }
+
+        if (strcmp(arg, "--target") == 0) {
+            saw_cli_flag = true;
+            if (i + 1 < argc) {
+                out->target = argv[++i];
+                continue;
+            }
+            fprintf(stderr, RED "ERROR:" WHITE " --target requires a value\n");
+            out->parse_error = true;
+            return true;
+        }
+
+        if (strcmp(arg, "--force") == 0) {
+            saw_cli_flag = true;
+            out->force = true;
+            continue;
+        }
+
+        /* Positional arguments */
+        if (arg[0] != '-') {
+            if (positional_count == 0)
+                out->image = arg;
+            else if (positional_count == 1)
+                out->target = arg;
+            else {
+                fprintf(stderr, RED "ERROR:" WHITE  "too many positional arguments\n");
+                out->parse_error = true;
+                return true;
+            }
+            positional_count++;
+            continue;
+        }
+
+        /* Unknown flag */
+        fprintf(stderr, RED "ERROR:" WHITE " unknown option '%s'\n", arg);
+        out->parse_error = true;
+        return true;
+    }
+
+    /* If CLI flags were used, require both image + target */
+    if (saw_cli_flag) {
+        if (!out->image) {
+            fprintf(stderr, RED "ERROR:" WHITE " missing required --image argument\n");
+            out->parse_error = true;
+            return true;
+        }
+        if (!out->target) {
+            fprintf(stderr, RED "ERROR:" WHITE " missing required --target argument\n");
+            out->parse_error = true;
+            return true;
+        }
+        out->cli_mode = true;
+        return true;
+    }
+
+    /* Positional form: require both */
+    if (positional_count == 1) {
+        fprintf(stderr, RED "ERROR:" WHITE " missing target device\n");
+        out->parse_error = true;
+        return true;
+    }
+
+    if (positional_count == 2) {
+        out->cli_mode = true;
+        return true;
+    }
+
+    /* No CLI args → GUI mode */
+    return false;
+}
+
+bool restore_run_cli(const char *image_path,
+                     const char *target_device,
+                     bool force)
+{
+    (void)force; /* force is intentionally unused for now */
+
+    if (!image_path || !target_device) {
+        fprintf(stderr, RED "ERROR:" WHITE " missing required arguments.\n");
         return false;
     }
 
-    /* 1b. Normalize to base path and detect chunked series by filename */
+    /* ---------------------------------------------------------
+     * 1. Normalize image base path (strip .000 if chunked)
+     * --------------------------------------------------------- */
     char base_image[1024] = {0};
     bool chunked_by_name = false;
-    get_image_base_and_chunked(selected_path,
+
+    get_image_base_and_chunked(image_path,
                                base_image,
                                sizeof(base_image),
                                &chunked_by_name);
 
-    /* 1c. Try reading chunking info from metadata */
-    bool chunked_by_meta = false;
-    int  chunk_size_meta = 0;
-
-    bool have_chunked_meta = read_chunked_from_metadata(base_image,
-                                                        &chunked_by_meta);
-
-    /* Read chunk size (optional; we don't need the boolean) */
-    read_chunk_size_from_metadata(base_image, &chunk_size_meta);
-
-    /*
-     * Final decision:
-     *   - If metadata exists, trust it.
-     *   - Otherwise fall back to filename detection.
-     */
-    bool chunked = have_chunked_meta ? chunked_by_meta : chunked_by_name;
-
-    // fprintf(stderr,
-    //         YELLOW "DEBUG: selected='%s', base='%s', "
-    //         "chunked_by_name=%s, chunked_by_meta=%s, final=%s\n" RESET,
-    //         selected_path,
-    //         base_image,
-    //         chunked_by_name ? "true" : "false",
-    //         have_chunked_meta ? (chunked_by_meta ? "true" : "false") : "N/A",
-    //         chunked ? "true" : "false");
-
-    /* 2. Choose target partition. */
-    char *device = ui_choose_partition_with_title(
-        "Select destination partition for restore",
-        "Choose the partition that will be overwritten:"
-    );
-    if (!device) {
-        free(selected_path);
+    /* ---------------------------------------------------------
+     * 2. Load metadata (authoritative)
+     * --------------------------------------------------------- */
+    MetadataInfo meta;
+    if (!load_metadata_or_exit(base_image, &meta)) {
+        /* load_metadata_or_exit() already prints error */
         return false;
     }
 
-    /* 3. Read backend from metadata JSON (based on base image path). */
-    char backend[128] = {0};
-    if (!read_backend_from_metadata(base_image, backend, sizeof(backend))) {
-        ui_error("Could not read backend from metadata.\n"
-        "Make sure the .json file exists next to the image.");
-        free(device);
-        free(selected_path);
+    /* ---------------------------------------------------------
+     * 3. Validate target device exists
+     * --------------------------------------------------------- */
+    struct stat st;
+    if (stat(target_device, &st) != 0) {
+        fprintf(stderr, RED "ERROR:" WHITE " target device does not exist: %s\n",
+                target_device);
         return false;
     }
 
-    /* 4. Read compression from metadata JSON (based on base image path). */
-    char compression[64] = {0};
-    if (!read_compression_from_metadata(base_image,
-        compression,
-        sizeof(compression))) {
+    /* ---------------------------------------------------------
+     * 4. Partition size check (unless --force)
+     * --------------------------------------------------------- */
+    long long tgt_bytes = get_partition_size_bytes(target_device);
+    if (tgt_bytes <= 0) {
+        fprintf(stderr, RED "ERROR:" WHITE " could not determine size of target partition.\n");
+        return false;
+    }
+    /* ---------------------------------------------------------
+     * Partclone cannot restore to a smaller partition.
+     * This is a hard limitation and cannot be overridden.
+     * --------------------------------------------------------- */
+    if (tgt_bytes < meta.partition_size_bytes) {
         fprintf(stderr,
-                YELLOW "No compression field found in metadata. "
-                "Assuming lz4.\n" RESET);
-        strcpy(compression, "lz4");
-        }
+                RED "ERROR:" WHITE " Target partition is smaller than the original.\n"
+                "       Original: %.2f GB\n"
+                "       Target:   %.2f GB\n"
+                YELLOW "       This is a hard limitation of partclone and cannot be overridden.\n" RESET,
+                meta.partition_size_bytes / 1e9,
+                tgt_bytes / 1e9);
+        return false;
+    }
 
-        /* 5. Run restore pipeline using base path and chunked flag. */
-        bool ok = run_restore_pipeline(backend,
-                                       base_image,
-                                       device,
-                                       compression,
-                                       chunked);
 
-        free(device);
-        free(selected_path);
+    /* ---------------------------------------------------------
+     * 5. Run restore pipeline
+     * --------------------------------------------------------- */
+    bool ok = run_restore_pipeline(
+        meta.backend,
+        base_image,
+        target_device,
+        meta.compression,
+        meta.chunked
+    );
 
-        return ok;
+    if (!ok) {
+        fprintf(stderr, "Restore failed.\n");
+        return false;
+    }
+
+    return true;
 }
-

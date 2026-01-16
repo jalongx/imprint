@@ -281,7 +281,9 @@ bool write_metadata(const char *image_path,
                     const char *fs_type,
                     const char *backend,
                     const char *compression,
-                    int effective_chunk_mb)
+                    int effective_chunk_mb,
+                    int chunk_count)
+
 {
     if (!image_path || !device || !fs_type || !backend)
         return false;
@@ -346,6 +348,7 @@ bool write_metadata(const char *image_path,
     fprintf(fp, "  \"image_checksum_sha256\": \"%s\",\n", checksum);
     fprintf(fp, "  \"chunked\": %s,\n", chunked ? "true" : "false");
     fprintf(fp, "  \"chunk_size_mb\": %d,\n", chunk_size_mb);
+    fprintf(fp, "  \"chunk_count\": %d,\n", chunk_count);
     fprintf(fp, "  \"source_disk\": \"%s\",\n", parent_disk);
     fprintf(fp, "  \"source_partition_layout\": %s,\n", layout_json);
     fprintf(fp, "  \"notes\": \"\"\n");

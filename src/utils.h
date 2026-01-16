@@ -36,7 +36,8 @@ bool write_metadata(const char *image_path,
                     const char *fs_type,
                     const char *backend,
                     const char *compression,
-                    int effective_chunk_mb);
+                    int effective_chunk_mb,
+                    int chunk_count);
 
 bool compute_sha256(const char *filepath, char *out, size_t out_len);
 

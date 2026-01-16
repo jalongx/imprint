@@ -14,10 +14,6 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <time.h>
-#include <string.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
 #include <fcntl.h>
 #include <dirent.h>
 
@@ -51,6 +47,8 @@ void print_backup_usage(void)
     );
 }
 
+
+
 bool parse_backup_cli_args(int argc, char **argv, BackupCLIArgs *out)
 {
     out->cli_mode = false;
@@ -69,13 +67,7 @@ bool parse_backup_cli_args(int argc, char **argv, BackupCLIArgs *out)
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
 
-        if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
-            print_backup_usage();
-            out->parse_error = false;   /* not an error */
-            return false;               /* signal: do NOT run CLI or GUI */
-        }
-
-        if (arg[0] == '-')
+         if (arg[0] == '-')
             saw_cli_flag = true;
 
         if (strcmp(arg, "--source") == 0) {
@@ -205,6 +197,8 @@ static const char *get_compression_ext(const char *comp)
 }
 
 
+
+
 /* Map filesystem type to partclone backend. */
 static const char *partclone_backend_for_fs(const char *fs_type)
 {
@@ -233,6 +227,8 @@ static const char *partclone_backend_for_fs(const char *fs_type)
 
     return NULL;
 }
+
+
 
 
 /* Build a default filename based on device, filesystem, and compression. */
@@ -264,6 +260,8 @@ static void build_default_filename(const char *device, const char *fs_type,
 }
 
 
+
+
 /* Build full path: dir + "/" + filename. Caller must free. */
 static char *join_path(const char *dir, const char *filename)
 {
@@ -276,6 +274,10 @@ static char *join_path(const char *dir, const char *filename)
     return path;
 }
 
+
+
+
+
 /* Run partclone + compressor + streaming checksum pipeline. */
 bool run_backup_pipeline(const char *backend,
                          const char *device,
@@ -284,6 +286,8 @@ bool run_backup_pipeline(const char *backend,
                          const char *compressor,
                          int chunk_mb)
 {
+    (void)fs_type;
+
     if (!backend || !device || !output_path)
         return false;
 
@@ -463,12 +467,10 @@ bool run_backup_pipeline(const char *backend,
         return false;
     }
 
-    /* 7. Write metadata using effective compressor */
-    write_metadata(output_path, device, fs_type, backend, compressor, chunk_mb);
-
-
     return true;
 }
+
+
 
 bool backup_run_interactive(void)
 {
@@ -654,6 +656,21 @@ bool backup_run_interactive(void)
         gx_config.backup_dir[sizeof(gx_config.backup_dir) - 1] = '\0';
         ghostx_config_save();
 
+
+        int effective_chunk_mb = gx_config.chunk_size_mb;   // chunk_mb is 0 for single-image, >0 for chunked
+
+        if (effective_chunk_mb == 0) {
+            chunk_count = 1;                 // single file
+        }
+
+        write_metadata(output_path,
+                       device,
+                       fs_type,
+                       backend,
+                       gx_config.compression,
+                       effective_chunk_mb,    // ✅ reflects actual behavior
+                       chunk_count);
+
         /* Build paths for checksum and metadata */
         char sha_path[2048];
         snprintf(sha_path, sizeof(sha_path), "%s.sha256", output_path);
@@ -700,6 +717,9 @@ bool backup_run_interactive(void)
 
     return ok;
 }
+
+
+
 
 bool backup_run_cli(const char *device,
                     const char *output_path,
@@ -949,6 +969,21 @@ bool backup_run_cli(const char *device,
     char meta_path[2048];
 
     /* Build sha256 path safely */
+
+    int effective_chunk_mb = chunk_mb;   // chunk_mb is 0 for single-image, >0 for chunked
+
+    if (effective_chunk_mb == 0) {
+        chunk_count = 1;                 // single file
+    }
+
+    write_metadata(output_path,
+                   device,
+                   fs_type,
+                   backend,
+                   gx_config.compression,
+                   effective_chunk_mb,    // ✅ reflects actual behavior
+                   chunk_count);
+
     snprintf(sha_path, sizeof(sha_path), "%s", output_path);
     strncat(sha_path, ".sha256", sizeof(sha_path) - strlen(sha_path) - 1);
 

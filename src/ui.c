@@ -12,7 +12,7 @@
 void ui_error(const char *message)
 {
     if (gx_no_gui) {
-        fprintf(stderr, YELLOW "ERROR: %s\n" RESET, message);
+        fprintf(stderr, RED "ERROR: %s\n" RESET, message);
         return;
     }
 

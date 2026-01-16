@@ -5,8 +5,13 @@
 #include <zstd.h>
 #include <stdlib.h>
 #include <lz4frame.h>
+#include <stdbool.h>
+#include <ctype.h>
 
-static bool read_magic(const char *path, unsigned char *buf, size_t len) {
+/* Read first len bytes from file */
+static bool
+read_magic(const char *path, unsigned char *buf, size_t len)
+{
     FILE *f = fopen(path, "rb");
     if (!f)
         return false;
@@ -17,7 +22,10 @@ static bool read_magic(const char *path, unsigned char *buf, size_t len) {
     return r == len;
 }
 
-static bool decompress_zstd_header(const char *path, unsigned char *out, size_t out_len) {
+/* Decompress up to out_len bytes of a zstd stream into out */
+static bool
+decompress_zstd_header(const char *path, unsigned char *out, size_t out_len)
+{
     FILE *f = fopen(path, "rb");
     if (!f)
         return false;
@@ -35,34 +43,30 @@ static bool decompress_zstd_header(const char *path, unsigned char *out, size_t 
         return false;
     }
 
-    unsigned char inbuf[1024 * 1024];   // 1 MB input buffer
-    ZSTD_inBuffer input = (ZSTD_inBuffer){ inbuf, 0, 0 };
-    ZSTD_outBuffer output = (ZSTD_outBuffer){ out, out_len, 0 };
+    unsigned char inbuf[1024 * 1024];
+    ZSTD_inBuffer input = { inbuf, 0, 0 };
+    ZSTD_outBuffer output = { out, out_len, 0 };
 
     while (output.pos < out_len) {
         if (input.pos == input.size) {
             input.size = fread(inbuf, 1, sizeof(inbuf), f);
             input.pos = 0;
 
-            if (input.size == 0) {
-                break; // EOF
-            }
+            if (input.size == 0)
+                break;
         }
 
         size_t ret = ZSTD_decompressStream(dstream, &output, &input);
-
         if (ZSTD_isError(ret)) {
-            printf("DEBUG: ZSTD_decompressStream error: %s\n",
-                   ZSTD_getErrorName(ret));
+            /* printf("DEBUG: ZSTD_decompressStream error: %s\n",
+             *                   ZSTD_getErrorName(ret)); */
             ZSTD_freeDStream(dstream);
             fclose(f);
             return false;
         }
 
-        if (output.pos > 0) {
-            // We have decompressed data!
+        if (ret == 0)
             break;
-        }
     }
 
     ZSTD_freeDStream(dstream);
@@ -71,8 +75,10 @@ static bool decompress_zstd_header(const char *path, unsigned char *out, size_t 
     return output.pos > 0;
 }
 
-
-static bool decompress_lz4_header(const char *path, unsigned char *out, size_t out_len) {
+/* Decompress up to out_len bytes of an LZ4 stream into out */
+static bool
+decompress_lz4_header(const char *path, unsigned char *out, size_t out_len)
+{
     FILE *f = fopen(path, "rb");
     if (!f)
         return false;
@@ -84,7 +90,7 @@ static bool decompress_lz4_header(const char *path, unsigned char *out, size_t o
         return false;
     }
 
-    unsigned char inbuf[1024 * 1024];   // 1 MB input buffer
+    unsigned char inbuf[1024 * 1024];
     size_t out_pos = 0;
 
     while (out_pos < out_len) {
@@ -104,8 +110,8 @@ static bool decompress_lz4_header(const char *path, unsigned char *out, size_t o
                                          NULL);
 
             if (LZ4F_isError(ret)) {
-                printf("DEBUG: LZ4F_decompress error: %s\n",
-                       LZ4F_getErrorName(ret));
+                /* printf("DEBUG: LZ4F_decompress error: %s\n",
+                 *                       LZ4F_getErrorName(ret)); */
                 LZ4F_freeDecompressionContext(dctx);
                 fclose(f);
                 return false;
@@ -114,8 +120,8 @@ static bool decompress_lz4_header(const char *path, unsigned char *out, size_t o
             in_pos += src_size;
             out_pos += dst_size;
 
-            if (dst_size > 0)
-                goto done; // we got some decompressed bytes
+            if (ret == 0)
+                goto done;
         }
     }
 
@@ -126,138 +132,231 @@ static bool decompress_lz4_header(const char *path, unsigned char *out, size_t o
     return out_pos > 0;
 }
 
+/* Infer backend from filesystem name */
+static void
+infer_backend_from_fs(const char *fs, char *backend, size_t backend_len)
+{
+    if (!fs || !*fs) {
+        snprintf(backend, backend_len, "unknown");
+        return;
+    }
 
+    if (strstr(fs, "EXT") || strstr(fs, "EXTFS")) {
+        snprintf(backend, backend_len, "partclone.extfs");
+    } else if (strstr(fs, "NTFS")) {
+        snprintf(backend, backend_len, "partclone.ntfs");
+    } else if (strstr(fs, "BTRFS")) {
+        snprintf(backend, backend_len, "partclone.btrfs");
+    } else if (strstr(fs, "XFS")) {
+        snprintf(backend, backend_len, "partclone.xfs");
+    } else if (strstr(fs, "FAT")) {
+        snprintf(backend, backend_len, "partclone.fat");
+    } else if (strstr(fs, "F2FS")) {
+        snprintf(backend, backend_len, "partclone.f2fs");
+    } else if (strstr(fs, "HFS")) {
+        snprintf(backend, backend_len, "partclone.hfsp");
+    } else {
+        snprintf(backend, backend_len, "unknown");
+    }
+}
 
-typedef struct {
-    char magic[8];        // "partclon"
-    uint32_t version;
-    uint32_t header_size;
-    uint32_t block_size;
-    uint64_t total_blocks;
-    uint64_t used_blocks;
-    char fs[16];          // filesystem name (e.g. "ext4", "btrfs")
-} __attribute__((packed)) PartcloneHeader;
+/* Infer chunked from filename suffix ".000".."999" */
+static bool
+infer_chunked_from_path(const char *path)
+{
+    if (!path)
+        return false;
 
+    size_t len = strlen(path);
+    if (len < 4)
+        return false;
 
+    const char *p = path + len - 4;
+    if (p[0] != '.')
+        return false;
 
-bool sniff_image(const char *path, SniffResult *out) {
+    return isdigit((unsigned char)p[1]) &&
+    isdigit((unsigned char)p[2]) &&
+    isdigit((unsigned char)p[3]);
+}
+
+/* Try to parse numeric fields based on FS position */
+static bool
+parse_partclone_numeric_fields(const unsigned char *buf,
+                               size_t len,
+                               size_t fs_offset,
+                               uint32_t *block_size_out,
+                               uint64_t *total_blocks_out,
+                               uint64_t *used_blocks_out)
+{
+    if (!buf || len < 64)
+        return false;
+
+    uint32_t block_size = 0;
+    uint64_t total_blocks = 0;
+    uint64_t used_blocks = 0;
+
+    size_t search_start = fs_offset + 8;
+    if (search_start > len)
+        return false;
+
+    size_t search_end = (search_start + 64 < len) ? search_start + 64 : len;
+
+    for (size_t i = search_start; i + 4 <= search_end; i += 4) {
+        uint32_t candidate =
+        (uint32_t)(buf[i] |
+        (buf[i+1] << 8) |
+        (buf[i+2] << 16) |
+        (buf[i+3] << 24));
+
+        if (candidate >= 512 && candidate <= 65536 &&
+            (candidate & (candidate - 1)) == 0) {
+            block_size = candidate;
+
+        for (size_t j = search_start; j + 4 <= search_end; j += 4) {
+            uint32_t c1 =
+            (uint32_t)(buf[j] |
+            (buf[j+1] << 8) |
+            (buf[j+2] << 16) |
+            (buf[j+3] << 24));
+            for (size_t k = j + 4; k + 4 <= search_end; k += 4) {
+                uint32_t c2 =
+                (uint32_t)(buf[k] |
+                (buf[k+1] << 8) |
+                (buf[k+2] << 16) |
+                (buf[k+3] << 24));
+                if (c1 == c2 && c1 > 0) {
+                    total_blocks = c1;
+                    used_blocks  = c2;
+                    goto done;
+                }
+            }
+        }
+            }
+    }
+
+    done:
+    if (block_size == 0 || total_blocks == 0) {
+        *block_size_out    = 0;
+        *total_blocks_out  = 0;
+        *used_blocks_out   = 0;
+        return false;
+    }
+
+    *block_size_out    = block_size;
+    *total_blocks_out  = total_blocks;
+    *used_blocks_out   = used_blocks;
+    return true;
+}
+
+bool
+sniff_image(const char *path, SniffResult *out)
+{
     memset(out, 0, sizeof(SniffResult));
 
     unsigned char magic[4];
     if (!read_magic(path, magic, sizeof(magic))) {
-        printf("DEBUG: read_magic() failed\n");
+        /* printf("DEBUG: read_magic() failed\n"); */
         return false;
     }
 
-    printf("DEBUG: magic = %02X %02X %02X %02X\n",
-           magic[0], magic[1], magic[2], magic[3]);
-
     unsigned char headerbuf[65536];
+    size_t header_len = sizeof(headerbuf);
+    memset(headerbuf, 0, header_len);
+    bool have_header = false;
 
-    //
-    // ────────────────────────────────────────────────
-    //  Z S T D
-    // ────────────────────────────────────────────────
-    //
     if (magic[0] == 0x28 && magic[1] == 0xB5 &&
         magic[2] == 0x2F && magic[3] == 0xFD) {
 
         strcpy(out->compression, "zstd");
-    printf("DEBUG: Detected zstd, attempting partial decompression...\n");
 
-    if (!decompress_zstd_header(path, headerbuf, sizeof(headerbuf))) {
-        printf("DEBUG: decompress_zstd_header() failed\n");
+    if (!decompress_zstd_header(path, headerbuf, header_len)) {
+        /* printf("DEBUG: decompress_zstd_header() failed\n"); */
         return false;
     }
 
-    printf("DEBUG: Partial decompression succeeded\n");
-        }
+    have_header = true;
 
-        //
-        // ────────────────────────────────────────────────
-        //  L Z 4
-        // ────────────────────────────────────────────────
-        //
-        else if (magic[0] == 0x04 && magic[1] == 0x22 &&
+        } else if (magic[0] == 0x04 && magic[1] == 0x22 &&
             magic[2] == 0x4D && magic[3] == 0x18) {
 
             strcpy(out->compression, "lz4");
-        printf("DEBUG: Detected lz4, attempting partial decompression...\n");
 
-        if (!decompress_lz4_header(path, headerbuf, sizeof(headerbuf))) {
-            printf("DEBUG: decompress_lz4_header() failed\n");
+        if (!decompress_lz4_header(path, headerbuf, header_len)) {
+            /* printf("DEBUG: decompress_lz4_header() failed\n"); */
             return false;
         }
 
-        printf("DEBUG: Partial decompression succeeded\n");
-            }
+        have_header = true;
 
-            //
-            // ────────────────────────────────────────────────
-            //  UNKNOWN COMPRESSION
-            // ────────────────────────────────────────────────
-            //
-            else {
+            } else {
                 strcpy(out->compression, "unknown");
-                printf("DEBUG: Unknown compression\n");
-                out->valid = true;
+                out->valid   = true;
+                out->chunked = infer_chunked_from_path(path);
                 return true;
             }
 
-            //
-            // ────────────────────────────────────────────────
-            //  PARTCLONE TEXTUAL HEADER DETECTION
-            // ────────────────────────────────────────────────
-            //
-            if (memcmp(headerbuf, "partclon", 8) != 0) {
-                printf("DEBUG: Partclone magic not found\n");
+            if (!have_header) {
+                out->valid = false;
+                return false;
+            }
+
+            if (memcmp(headerbuf, "partclone-image", 15) != 0) {
                 strcpy(out->backend, "unknown");
-                out->valid = true;
+                out->valid   = true;
+                out->chunked = infer_chunked_from_path(path);
                 return true;
             }
 
-            printf("DEBUG: Partclone header detected\n");
-
-            printf("DEBUG: first 64 bytes of decompressed data:\n");
-            for (int i = 0; i < 64; i++) {
-                printf("%02X ", headerbuf[i]);
-            }
-            printf("\n");
-
-            //
-            // ────────────────────────────────────────────────
-            //  FILESYSTEM NAME EXTRACTION
-            // ────────────────────────────────────────────────
-            //
-            const char *fs_names[] = {
-                "BTRFS", "EXT4", "EXT3", "EXT2",
-                "XFS", "NTFS", "FAT32", "F2FS"
+            const char *fs_candidates[] = {
+                "BTRFS", "EXTFS", "EXT4", "EXT3", "EXT2",
+                "XFS", "NTFS", "FAT32", "FAT", "F2FS", "HFS", "REFS"
             };
-            const size_t fs_count = sizeof(fs_names) / sizeof(fs_names[0]);
+            const size_t fs_count = sizeof(fs_candidates) / sizeof(fs_candidates[0]);
+
             const char *found_fs = NULL;
+            size_t fs_offset = 0;
 
             for (size_t i = 0; i < fs_count; i++) {
-                const char *p = memmem(headerbuf, 128, fs_names[i], strlen(fs_names[i]));
+                const char *p = memmem(headerbuf, header_len,
+                                       fs_candidates[i],
+                                       strlen(fs_candidates[i]));
                 if (p) {
-                    found_fs = fs_names[i];
+                    found_fs = fs_candidates[i];
+                    fs_offset = (size_t)(p - (const char *)headerbuf);
                     break;
                 }
             }
 
+            char fs_name[32] = {0};
             if (found_fs)
-                strcpy(out->backend, found_fs);
-    else
-        strcpy(out->backend, "unknown");
+                strncpy(fs_name, found_fs, sizeof(fs_name) - 1);
 
-    //
-    // ────────────────────────────────────────────────
-    //  NUMERIC FIELDS (NOT PARSED YET)
-    // ────────────────────────────────────────────────
-    //
+    infer_backend_from_fs(fs_name, out->backend, sizeof(out->backend));
+
     out->block_size = 0;
     out->fs_bytes   = 0;
     out->used_bytes = 0;
 
-    out->valid = true;
+    if (found_fs) {
+        uint32_t block_size   = 0;
+        uint64_t total_blocks = 0;
+        uint64_t used_blocks  = 0;
+
+        bool ok = parse_partclone_numeric_fields(headerbuf,
+                                                 header_len,
+                                                 fs_offset,
+                                                 &block_size,
+                                                 &total_blocks,
+                                                 &used_blocks);
+        if (ok) {
+            out->block_size = block_size;
+            out->fs_bytes   = (uint64_t)block_size * total_blocks;
+            out->used_bytes = (uint64_t)block_size * used_blocks;
+        }
+    }
+
+    out->chunked = infer_chunked_from_path(path);
+    out->valid   = true;
     return true;
 }
