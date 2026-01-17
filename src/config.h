@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-#define GHOSTX_VERSION    "0.9.211"
+#define GHOSTX_VERSION    "0.9.4"
 #define GHOSTX_BUILD_DATE __DATE__
 
 typedef struct {
