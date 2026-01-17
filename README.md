@@ -1,6 +1,6 @@
 # Imprint Disk Imager
 
-Imprint provides a safe way to back up and restore Linux partitions using partclone. It includes both a simple Zenity‑based UI and a full command‑line interface for headless or automated workflows.
+Imprint provides a safe way to back up and restore disk partitions using partclone. It includes both a simple Zenity‑based UI and a full command‑line interface for headless or automated workflows.
 
 - You can backup or restore unmounted **non-system** partitions from within your Linux operating system. You can backup and restore **system partitions** by booting with the Imprint Rescue ISO or booting to another Linux installation on the same computer.
 - It only backs up the data on the partition -- no raw images that are the same size as the partition you're backing up.
