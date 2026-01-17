@@ -88,68 +88,105 @@ char *ui_choose_directory(void)
 
 char *ui_choose_partition(void)
 {
-    FILE *fp = popen("lsblk -rno NAME,LABEL,FSTYPE,SIZE,MOUNTPOINT", "r");
+    // PATH first so it's always present and easy to parse
+    FILE *fp = popen("lsblk -rpno PATH,TYPE,FSTYPE,SIZE,LABEL,MOUNTPOINT", "r");
     if (!fp) {
         ui_error("Failed to run lsblk.");
         return NULL;
     }
 
-    // Track mount status for each device
     struct entry {
-        char device[128];
+        char device[256];   // full PATH
         int mounted;
     } entries[256];
+
     int entry_count = 0;
 
-    // Start building the zenity command
     char cmd[16384];
     strcpy(cmd,
            "zenity --list "
            "--title='Select partition to back up' "
            "--text='Choose a partition:' "
-           "--width=900 --height=500 "
-           "--column='Device' "
-           "--column='Label' "
+           "--width=1200 --height=1000 "
+           "--column='Path' "
+           "--column='Type' "
            "--column='Filesystem' "
            "--column='Size' "
+           "--column='Label' "
            "--column='Status' "
            "--print-column=1 2>/dev/null ");
 
     char line[512];
+
     while (fgets(line, sizeof(line), fp)) {
-        char name[128]={0}, label[128]={0}, fstype[64]={0}, size[64]={0}, mount[256]={0};
 
-        int fields = sscanf(line, "%127s %127s %63s %63s %255s",
-                            name, label, fstype, size, mount);
+        char path[256]={0}, type[32]={0}, fstype[64]={0},
+        size[64]={0}, label[128]={0}, mount[256]={0};
 
-        if (fields < 4 || strlen(fstype)==0)
+        // PATH TYPE FSTYPE SIZE LABEL MOUNTPOINT
+        int fields = sscanf(line, "%255s %31s %63s %63s %127s %255s",
+                            path, type, fstype, size, label, mount);
+
+        // Require at least PATH + TYPE
+        if (fields < 2)
             continue;
 
-        size_t len = strlen(name);
-        if (!(strchr(name,'p') || (len>0 && isdigit(name[len-1]))))
+        // Skip devices with no valid PATH
+        if (strlen(path) == 0)
             continue;
+
+        // Accept partitions, LUKS, and LVM
+        if (strcmp(type, "part") != 0 &&
+            strcmp(type, "crypt") != 0 &&
+            strcmp(type, "lvm")  != 0)
+            continue;
+
+        // Normalize label (optional field)
+        if (fields < 5 || strlen(label) == 0) {
+            strcpy(label, "(no label)");
+        } else {
+            int empty = 1;
+            for (int i = 0; label[i]; i++) {
+                if (!isspace((unsigned char)label[i])) {
+                    empty = 0;
+                    break;
+                }
+            }
+            if (empty)
+                strcpy(label, "(no label)");
+        }
+
+        // Normalize size (optional)
+        if (fields < 4 || strlen(size) == 0)
+            strcpy(size, "(unknown)");
+
+        // Mountpoint (optional)
+        int is_mounted = (fields >= 6 && strlen(mount) > 0);
 
         char status[256];
-        int is_mounted = (fields==5 && strlen(mount)>0);
-
         if (is_mounted)
-            snprintf(status,sizeof(status),"MOUNTED at %s", mount);
+            snprintf(status, sizeof(status), "MOUNTED at %s", mount);
         else
-            snprintf(status,sizeof(status)," ");
+            snprintf(status, sizeof(status), "not mounted");
 
-        // Record mount status for later lookup
-        strncpy(entries[entry_count].device, name, sizeof(entries[entry_count].device));
+        // Store PATH
+        snprintf(entries[entry_count].device,
+                 sizeof(entries[entry_count].device),
+                 "%s",
+                 path);
+
         entries[entry_count].mounted = is_mounted;
         entry_count++;
 
-        // Append row as arguments
+        // Build Zenity row
         char row[1024];
         snprintf(row, sizeof(row),
-                 " '/dev/%s' '%s' '%s' '%s' '%s'",
-                 name,
-                 strlen(label)?label:"(no label)",
-                 fstype,
+                 " '%s' '%s' '%s' '%s' '%s' '%s'",
+                 path,
+                 type,
+                 strlen(fstype) ? fstype : "(none)",
                  size,
+                 label,
                  status);
 
         strcat(cmd, row);
@@ -157,7 +194,6 @@ char *ui_choose_partition(void)
 
     pclose(fp);
 
-    // Run Zenity and capture output
     FILE *zen = popen(cmd, "r");
     if (!zen) {
         ui_error("Failed to launch Zenity.");
@@ -174,15 +210,8 @@ char *ui_choose_partition(void)
 
     result[strcspn(result, "\r\n")] = '\0';
 
-    // Check mount status using our stored table
     for (int i = 0; i < entry_count; i++) {
-        char fullpath[256];
-        snprintf(fullpath, sizeof(fullpath),
-                 "/dev/%.*s",
-                 (int)sizeof(entries[i].device) - 1,
-                 entries[i].device);
-
-        if (strcmp(fullpath, result) == 0) {
+        if (strcmp(entries[i].device, result) == 0) {
             if (entries[i].mounted) {
                 ui_error("The selected partition is mounted and cannot be backed up.");
                 return NULL;
@@ -193,6 +222,7 @@ char *ui_choose_partition(void)
 
     return strdup(result);
 }
+
 
 
 /* Filename entry dialog */
@@ -297,16 +327,18 @@ char *ui_choose_image_file(void)
 
 char *ui_choose_partition_with_title(const char *title, const char *text)
 {
-    FILE *fp = popen("lsblk -rno NAME,LABEL,FSTYPE,SIZE,MOUNTPOINT", "r");
+    // PATH first so it's always present and easy to parse
+    FILE *fp = popen("lsblk -rpno PATH,TYPE,FSTYPE,SIZE,LABEL,MOUNTPOINT", "r");
     if (!fp) {
         ui_error("Failed to run lsblk.");
         return NULL;
     }
 
     struct entry {
-        char device[128];
+        char device[256];   // full PATH
         int mounted;
     } entries[256];
+
     int entry_count = 0;
 
     char cmd[16384];
@@ -315,7 +347,7 @@ char *ui_choose_partition_with_title(const char *title, const char *text)
              "--title='%s' "
              "--text='%s' "
              "--width=900 --height=500 "
-             "--column='Device' "
+             "--column='Path' "
              "--column='Label' "
              "--column='Filesystem' "
              "--column='Size' "
@@ -324,37 +356,62 @@ char *ui_choose_partition_with_title(const char *title, const char *text)
              title, text);
 
     char line[512];
+
     while (fgets(line, sizeof(line), fp)) {
-        char name[128]={0}, label[128]={0}, fstype[64]={0}, size[64]={0}, mount[256]={0};
 
-        int fields = sscanf(line, "%127s %127s %63s %63s %255s",
-                            name, label, fstype, size, mount);
+        char path[256]={0}, type[32]={0}, fstype[64]={0},
+        size[64]={0}, label[128]={0}, mount[256]={0};
 
-        if (fields < 4 || strlen(fstype)==0)
+        // PATH TYPE FSTYPE SIZE LABEL MOUNTPOINT
+        int fields = sscanf(line, "%255s %31s %63s %63s %127s %255s",
+                            path, type, fstype, size, label, mount);
+
+        // Require at least PATH + TYPE
+        if (fields < 2)
             continue;
 
-        size_t len = strlen(name);
-        if (!(strchr(name,'p') || (len>0 && isdigit(name[len-1]))))
+        // Skip devices with no valid PATH
+        if (strlen(path) == 0)
             continue;
+
+        // Accept partitions, LUKS, and LVM
+        if (strcmp(type, "part") != 0 &&
+            strcmp(type, "crypt") != 0 &&
+            strcmp(type, "lvm")  != 0)
+            continue;
+
+        // Normalize label
+        if (fields < 5 || strlen(label) == 0)
+            strcpy(label, "(no label)");
+
+        // Normalize size
+        if (fields < 4 || strlen(size) == 0)
+            strcpy(size, "(unknown)");
+
+        int is_mounted = (fields >= 6 && strlen(mount) > 0);
 
         char status[256];
-        int is_mounted = (fields==5 && strlen(mount)>0);
-
         if (is_mounted)
-            snprintf(status,sizeof(status),"MOUNTED at %s", mount);
+            snprintf(status, sizeof(status), "MOUNTED at %s", mount);
         else
-            snprintf(status,sizeof(status)," ");
+            snprintf(status, sizeof(status), "not mounted");
 
-        strncpy(entries[entry_count].device, name, sizeof(entries[entry_count].device));
+        // Store PATH
+        snprintf(entries[entry_count].device,
+                 sizeof(entries[entry_count].device),
+                 "%s",
+                 path);
+
         entries[entry_count].mounted = is_mounted;
         entry_count++;
 
+        // Build Zenity row
         char row[1024];
         snprintf(row, sizeof(row),
-                 " '/dev/%s' '%s' '%s' '%s' '%s'",
-                 name,
-                 strlen(label)?label:"(no label)",
-                 fstype,
+                 " '%s' '%s' '%s' '%s' '%s'",
+                 path,
+                 label,
+                 strlen(fstype) ? fstype : "(none)",
                  size,
                  status);
 
@@ -379,14 +436,9 @@ char *ui_choose_partition_with_title(const char *title, const char *text)
 
     result[strcspn(result, "\r\n")] = '\0';
 
+    // Validate mount status
     for (int i = 0; i < entry_count; i++) {
-        char fullpath[256];
-        snprintf(fullpath, sizeof(fullpath),
-                 "/dev/%.*s",
-                 (int)sizeof(entries[i].device) - 1,
-                 entries[i].device);
-
-        if (strcmp(fullpath, result) == 0) {
+        if (strcmp(entries[i].device, result) == 0) {
             if (entries[i].mounted) {
                 ui_error("The selected partition is mounted and cannot be used.");
                 return NULL;
@@ -397,3 +449,4 @@ char *ui_choose_partition_with_title(const char *title, const char *text)
 
     return strdup(result);
 }
+

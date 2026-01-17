@@ -84,3 +84,16 @@ v0.9.4, 15-Jan-2026 — Restore CLI + unified chunked‑restore architecture
 - Simplified restore pipeline by deferring missing‑metadata fallback logic to a future branch.
 - Removed reliance on the experimental sniffer for restore decisions; partclone now provides authoritative filesystem‑size validation.
 - General cleanup and restructuring of restore.c for clarity, maintainability, and future feature expansion.
+
+v0.9.45 — 16‑Jan‑2026
+LUKS + LVM support and unified mapper‑aware device model
+- Added full backup/restore support for LUKS‑mapped devices and LVM logical volumes.
+- Rebuilt device/partitoin-picker with a PATH‑first, TYPE‑aware model for consistent handling of raw partitions, LUKS, and LVM.
+- Improved lsblk parsing to correctly interpret mapper hierarchies, missing labels, and variable‑length device names.
+- Ensured correct filesystem detection and backend selection across all mapper types.
+- Unified GUI and CLI device‑selection logic.
+- Improved metadata accuracy for mapper devices.
+- General cleanup and internal consistency improvements across backup and restore paths.
+- Validated backup and restore pipelines across LUKS, LVM, chunked images, and zstd compression.
+
+

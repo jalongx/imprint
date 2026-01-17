@@ -463,31 +463,77 @@ bool get_fs_type(const char *device, char *fs_type, int fs_type_len)
     if (!device || !fs_type || fs_type_len <= 0)
         return false;
 
-    char cmd[256];
-    snprintf(cmd, sizeof(cmd), "lsblk -no FSTYPE '%s' 2>/dev/null", device);
-
-    FILE *fp = popen(cmd, "r");
-    if (!fp)
-        return false;
-
     char buf[128] = {0};
-    if (!fgets(buf, sizeof(buf), fp)) {
-        pclose(fp);
-        return false;
+
+    //
+    // First attempt: lsblk (fast, works for most devices)
+    //
+    {
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd),
+                 "lsblk -no FSTYPE '%s' 2>/dev/null", device);
+
+        FILE *fp = popen(cmd, "r");
+        if (fp) {
+            if (fgets(buf, sizeof(buf), fp)) {
+                pclose(fp);
+
+                // Trim newline
+                buf[strcspn(buf, "\r\n")] = '\0';
+
+                // Trim leading whitespace
+                char *p = buf;
+                while (isspace((unsigned char)*p)) p++;
+
+                // If lsblk returned something meaningful, use it
+                if (*p != '\0') {
+                    strncpy(fs_type, p, fs_type_len - 1);
+                    fs_type[fs_type_len - 1] = '\0';
+                    return true;
+                }
+            } else {
+                pclose(fp);
+            }
+        }
     }
 
-    pclose(fp);
+    //
+    // Second attempt: blkid -p (deep probing, works for LUKS mapper devices)
+    //
+    {
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd),
+                 "blkid -p -o value -s TYPE '%s' 2>/dev/null", device);
 
-    buf[strcspn(buf, "\r\n")] = '\0';
+        FILE *fp = popen(cmd, "r");
+        if (!fp)
+            return false;
 
-    if (buf[0] == '\0')
-        return false;
+        memset(buf, 0, sizeof(buf));
 
-    strncpy(fs_type, buf, fs_type_len - 1);
-    fs_type[fs_type_len - 1] = '\0';
+        if (!fgets(buf, sizeof(buf), fp)) {
+            pclose(fp);
+            return false;
+        }
 
-    return true;
+        pclose(fp);
+
+        // Trim newline
+        buf[strcspn(buf, "\r\n")] = '\0';
+
+        // Trim leading whitespace
+        char *p = buf;
+        while (isspace((unsigned char)*p)) p++;
+
+        if (*p == '\0')
+            return false;
+
+        strncpy(fs_type, p, fs_type_len - 1);
+        fs_type[fs_type_len - 1] = '\0';
+        return true;
+    }
 }
+
 
 bool gx_test_fifo_capability(const char *dir)
 {
