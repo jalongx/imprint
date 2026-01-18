@@ -98,9 +98,7 @@ v0.9.45, 16‑Jan‑2026 - LUKS + LVM support and unified mapper‑aware device 
 v0.9.46, 17‑Jan‑2026 - Backup and Restore overwrite‑safety for both GUI and CLI, CLI force‑mode, and GUI/CLI consistency fixes
 - Added "Are you sure??" prompts when a user is about to overwrite a partition with an image file.
 - Added --force flag to allow unattended or scripted restores from the command line
-- Added full overwrite‑protection to backup operations, mirroring restore‑side safety.
 - Implemented a function to detect existing single‑file and chunked images, including .json metadata and .sha256 checksum files.
-- Added "Are you sure??" overwrite confirmations to GUI and CLI backup modes.
-- Introduced --force flag for CLI backups, enabling unattended and scripted backups that overwrite an existing image file / file series.
+- Added "Are you sure??" overwrite confirmations to GUI and CLI backup modes when a matching image already existed.
+- Introduced --force flag for CLI backups, enabling unattended and scripted backups that overwrite an existing image file/file series.
 - Fixed a minor bug where imprintr --help checked for dependencies before printing the help message.
-
