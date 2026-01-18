@@ -156,7 +156,7 @@ Command line restore of a LVM logical volume
 <img width="973" height="1470" alt="metadata" src="https://github.com/user-attachments/assets/81047949-2728-403f-922a-23b27d5c8024" />
 
 ### Command Line Options
-<img width="1033" height="963" alt="cli_help" src="https://github.com/user-attachments/assets/5e4cf089-8836-4493-9d77-27f443b6df0b" />
+<img width="1028" height="846" alt="imprint_help" src="https://github.com/user-attachments/assets/a60e1260-1c58-41b3-b2fc-e47f49d1b3d0" />
 
 ### Imprint Rescue ISO  
 <img width="1920" height="1080" alt="imprint_iso_1" src="https://github.com/user-attachments/assets/f6b8b0d2-5662-49a1-9214-3c6c02388025" />
