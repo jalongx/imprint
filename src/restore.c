@@ -561,6 +561,14 @@ bool restore_run_cli(const char *image_path,
         return false;
     }
 
+    /* Check image file existence */
+    if (access(image_path, F_OK) != 0) {
+        fprintf(stderr,
+                RED "ERROR:" WHITE " image file does not exist: %s\n",
+                image_path);
+        return false;
+    }
+
     /* ---------------------------------------------------------
      * 1. Normalize image base path (strip .000 if chunked)
      * --------------------------------------------------------- */
