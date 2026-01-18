@@ -23,16 +23,17 @@
  *    (this allows distinguishing "no override" from "--chunk 0")
  */
 typedef struct {
-    bool cli_mode;            /* CLI mode requested AND valid */
-    bool parse_error;         /* CLI args were present but invalid */
+    bool cli_mode;
+    bool parse_error;
 
-    const char *source;       /* --source <device> */
-    const char *target;       /* --target <path> */
+    const char *source;
+    const char *target;
+    const char *compress_override;
 
-    const char *compress_override; /* --compress <type> */
+    int  chunk_override;
+    bool chunk_override_set;
 
-    int  chunk_override;      /* --chunk <size_mb> (may be 0) */
-    bool chunk_override_set;  /* true if user explicitly provided --chunk */
+    bool force;   /* NEW */
 } BackupCLIArgs;
 
 /*
@@ -62,7 +63,9 @@ bool parse_backup_cli_args(int argc, char **argv, BackupCLIArgs *out);
 bool backup_run_cli(const char *device,
                     const char *output_path,
                     const char *compressor,
-                    int chunk_mb);
+                    int chunk_mb,
+                    bool force);
+
 
 /*
  * Run an interactive backup session:

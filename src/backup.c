@@ -31,6 +31,7 @@ void print_backup_usage(void)
             WHITE  "  --compress <type>       Compression: lz4, zstd, gzip\n"
                    "  --chunk <MB>            Split output into chunks of <MB> each (0 = no chunking)\n"
                    "  --help                  Show this help message and exit\n"
+                   "  --force                 Overwrite existing backup files without confirmation\n"
                    "\n"
             YELLOW "Positional form (equivalent):\n"
             WHITE  "  imprintb <device> <image>\n"
@@ -47,6 +48,36 @@ void print_backup_usage(void)
     );
 }
 
+static bool backup_outputs_exist(const char *output_path)
+{
+    struct stat st;
+
+    /* Single-file or base name for chunked */
+    if (stat(output_path, &st) == 0)
+        return true;
+
+    /* Check for chunked files: .000, .001, ... */
+    char chunk_path[2048];
+    for (unsigned i = 0; i < 1000; i++) {
+        snprintf(chunk_path, sizeof(chunk_path), "%s.%03u", output_path, i);
+        if (stat(chunk_path, &st) == 0)
+            return true;
+    }
+
+    /* Check metadata */
+    char meta_path[2048];
+    snprintf(meta_path, sizeof(meta_path), "%s.json", output_path);
+    if (stat(meta_path, &st) == 0)
+        return true;
+
+    /* Check checksum */
+    char sha_path[2048];
+    snprintf(sha_path, sizeof(sha_path), "%s.sha256", output_path);
+    if (stat(sha_path, &st) == 0)
+        return true;
+
+    return false;
+}
 
 
 bool parse_backup_cli_args(int argc, char **argv, BackupCLIArgs *out)
@@ -59,7 +90,9 @@ bool parse_backup_cli_args(int argc, char **argv, BackupCLIArgs *out)
     out->compress_override = NULL;
 
     out->chunk_override = 0;
-    out->chunk_override_set = false;   /* NEW */
+    out->chunk_override_set = false;
+
+    out->force = false;   /* NEW */
 
     bool saw_cli_flag = false;
     int positional_count = 0;
@@ -67,56 +100,64 @@ bool parse_backup_cli_args(int argc, char **argv, BackupCLIArgs *out)
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
 
-         if (arg[0] == '-')
-            saw_cli_flag = true;
-
         if (strcmp(arg, "--source") == 0) {
+            saw_cli_flag = true;
             if (i + 1 < argc) {
                 out->source = argv[++i];
                 continue;
             }
             fprintf(stderr, RED "ERROR" RESET ": --source requires a value\n");
             out->parse_error = true;
-            return false;
+            return true;
         }
 
         if (strcmp(arg, "--target") == 0) {
+            saw_cli_flag = true;
             if (i + 1 < argc) {
                 out->target = argv[++i];
                 continue;
             }
             fprintf(stderr, RED "ERROR" RESET ": --target requires a value\n");
             out->parse_error = true;
-            return false;
+            return true;
         }
 
         if (strcmp(arg, "--compress") == 0) {
+            saw_cli_flag = true;
             if (i + 1 < argc) {
                 out->compress_override = argv[++i];
                 continue;
             }
             fprintf(stderr, RED "ERROR" RESET ": --compress requires a value\n");
             out->parse_error = true;
-            return false;
+            return true;
         }
 
         if (strcmp(arg, "--chunk") == 0) {
+            saw_cli_flag = true;
             if (i + 1 < argc) {
                 out->chunk_override = atoi(argv[++i]);
-                out->chunk_override_set = true;   /* NEW */
+                out->chunk_override_set = true;
 
                 if (out->chunk_override < 0) {
                     fprintf(stderr, RED "ERROR" RESET ": invalid chunk size (must be >= 0 MB)\n");
                     out->parse_error = true;
-                    return false;
+                    return true;
                 }
                 continue;
             }
             fprintf(stderr, RED "ERROR" RESET ": --chunk requires a value\n");
             out->parse_error = true;
-            return false;
+            return true;
         }
 
+        if (strcmp(arg, "--force") == 0) {
+            saw_cli_flag = true;
+            out->force = true;
+            continue;
+        }
+
+        /* Positional arguments */
         if (arg[0] != '-') {
             if (positional_count == 0)
                 out->source = arg;
@@ -125,43 +166,43 @@ bool parse_backup_cli_args(int argc, char **argv, BackupCLIArgs *out)
             else {
                 fprintf(stderr, RED "ERROR" RESET ": too many positional arguments\n");
                 out->parse_error = true;
-                return false;
+                return true;
             }
             positional_count++;
             continue;
         }
 
+        /* Unknown flag */
         fprintf(stderr, RED "ERROR" RESET ": unknown option '%s'\n", arg);
         out->parse_error = true;
-        return false;
+        return true;
     }
 
+    /* CLI flag form */
     if (saw_cli_flag) {
-        if (!out->source) {
-            fprintf(stderr, RED "ERROR" RESET ": missing required --source argument\n");
+        if (!out->source || !out->target) {
+            fprintf(stderr, RED "ERROR" RESET ": missing required arguments\n");
             out->parse_error = true;
-            return false;
+            return true;
         }
-        if (!out->target) {
-            fprintf(stderr, RED "ERROR" RESET ": missing required --target argument\n");
-            out->parse_error = true;
-            return false;
-        }
+        out->cli_mode = true;
+        return true;
     }
 
-    /* If positional args were used, require both */
+    /* Positional form */
     if (positional_count == 1) {
         fprintf(stderr, RED "ERROR" RESET ": missing target path\n");
         out->parse_error = true;
-        return false;
+        return true;
     }
 
-    /* If neither source nor target was provided → GUI mode */
-    if (!out->source && !out->target)
-        return false;
+    if (positional_count == 2) {
+        out->cli_mode = true;
+        return true;
+    }
 
-    out->cli_mode = true;
-    return true;
+    /* No CLI args → GUI mode */
+    return false;
 }
 
 
@@ -548,6 +589,28 @@ bool backup_run_interactive(void)
         mkdir(gx_workdir_override, 0700);
     }
 
+    /* ---------------------------------------------
+     * Overwrite confirmation (GUI)
+     * --------------------------------------------- */
+    if (backup_outputs_exist(output_path)) {
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "Backup files already exist:\n\n"
+                 "    %s\n\n"
+                 "They will be overwritten.\n"
+                 "Do you want to proceed?",
+                 output_path);
+
+        if (!ui_confirm(msg)) {
+            ui_info("Backup cancelled.");
+            free(dir);
+            free(device);
+            free(filename);
+            free(output_path);
+            return false;
+        }
+    }
+
     /* 7. Run backup pipeline */
     bool ok = run_backup_pipeline(backend,
                                   device,
@@ -555,6 +618,7 @@ bool backup_run_interactive(void)
                                   output_path,
                                   gx_config.compression,
                                   gx_config.chunk_size_mb);
+
 
     /* Capture end time */
     clock_gettime(CLOCK_MONOTONIC, &t_end);
@@ -724,7 +788,8 @@ bool backup_run_interactive(void)
 bool backup_run_cli(const char *device,
                     const char *output_path,
                     const char *compressor,
-                    int chunk_mb)
+                    int chunk_mb,
+                    bool force)   // ← NEW
 {
     (void)compressor;
 
@@ -838,6 +903,32 @@ bool backup_run_cli(const char *device,
     } else {
         gx_workdir_override[0] = '\0';
     }
+
+    /* ---------------------------------------------
+     * Overwrite confirmation (CLI)
+     * --------------------------------------------- */
+    if (!force && backup_outputs_exist(output_path)) {
+        fprintf(stderr,
+                YELLOW "WARNING:" WHITE " Backup files already exist:\n"
+                "    %s\n\n"
+                "They will be overwritten.\n"
+                "Proceed? [y/N]: " RESET,
+                output_path);
+
+        fflush(stderr);
+
+        char buf[16] = {0};
+        if (!fgets(buf, sizeof(buf), stdin)) {
+            fprintf(stderr, RED "ERROR:" WHITE " Failed to read input.\n");
+            return false;
+        }
+
+        if (buf[0] != 'y' && buf[0] != 'Y') {
+            fprintf(stderr, WHITE "Backup cancelled.\n");
+            return false;
+        }
+    }
+
 
     /* ---------------------------------------------
      * Run backup pipeline

@@ -85,8 +85,7 @@ v0.9.4, 15-Jan-2026 — Restore CLI + unified chunked‑restore architecture
 - Removed reliance on the experimental sniffer for restore decisions; partclone now provides authoritative filesystem‑size validation.
 - General cleanup and restructuring of restore.c for clarity, maintainability, and future feature expansion.
 
-v0.9.45 — 16‑Jan‑2026
-LUKS + LVM support and unified mapper‑aware device model
+v0.9.45, 16‑Jan‑2026 - LUKS + LVM support and unified mapper‑aware device model
 - Added full backup/restore support for LUKS‑mapped devices and LVM logical volumes.
 - Rebuilt device/partitoin-picker with a PATH‑first, TYPE‑aware model for consistent handling of raw partitions, LUKS, and LVM.
 - Improved lsblk parsing to correctly interpret mapper hierarchies, missing labels, and variable‑length device names.
@@ -96,4 +95,12 @@ LUKS + LVM support and unified mapper‑aware device model
 - General cleanup and internal consistency improvements across backup and restore paths.
 - Validated backup and restore pipelines across LUKS, LVM, chunked images, and zstd compression.
 
+v0.9.46, 17‑Jan‑2026 - Backup and Restore overwrite‑safety for both GUI and CLI, CLI force‑mode, and GUI/CLI consistency fixes
+- Added "Are you sure??" prompts when a user is about to overwrite a partition with an image file.
+- Added --force flag to allow unattended or scripted restores from the command line
+- Added full overwrite‑protection to backup operations, mirroring restore‑side safety.
+- Implemented a function to detect existing single‑file and chunked images, including .json metadata and .sha256 checksum files.
+- Added "Are you sure??" overwrite confirmations to GUI and CLI backup modes.
+- Introduced --force flag for CLI backups, enabling unattended and scripted backups that overwrite an existing image file / file series.
+- Fixed a minor bug where imprintr --help checked for dependencies before printing the help message.
 

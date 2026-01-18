@@ -678,7 +678,7 @@ bool print_restore_usage(struct parse_output *out)
             YELLOW "Options:\n" WHITE
             "        --image <image file>      Path and filename of backup image (.img.zst, .img.lz4, .000, etc.)\n"
             "        --target <device>         Destination block device (e.g. /dev/nvme0n1p3)\n"
-            "        --force                   Skip confirmation prompts and proceed non‑interactively\n"
+            "        --force                   Skip confirmation prompts when overwriting partitions\n"
             "        --help                    Show this help message\n"
             RESET
     );
