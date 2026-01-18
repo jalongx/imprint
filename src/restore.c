@@ -414,9 +414,19 @@ run_restore_pipeline(const char *backend,
     }
 
     if (!gx_no_gui) {
-        ui_info("Restore will now start.\n\n"
-        "Please monitor the terminal for partclone progress.\n"
-        "This will overwrite all data on the selected partition.");
+        char msg[512];
+        snprintf(msg, sizeof(msg),
+                 "You are about to overwrite the following partition:\n\n"
+                 "    %s\n\n"
+                 "All data on this partition will be permanently lost.\n"
+                 "This action cannot be undone.\n\n"
+                 "Do you want to proceed?",
+                 device);
+
+        if (!ui_confirm(msg)) {
+            ui_info("Restore cancelled.");
+            return false;
+        }
     }
 
     fprintf(stderr,
@@ -459,22 +469,6 @@ bool parse_restore_cli_args(int argc, char **argv, RestoreCLIArgs *out)
     for (int i = 1; i < argc; i++) {
         const char *arg = argv[i];
 
-        /* Help */
-        if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
-            fprintf(stderr,
-                    YELLOW "Usage:" WHITE " imprintr --image <path> --target <device>\n"
-                           "       imprintr <image> <device>\n\n"
-                    YELLOW "Options:\n" WHITE
-                           "        --image <image file>      Path and filename of backup image (.img.zst, .img.lz4, .000, etc.)\n"
-                           "        --target <device>         Destination block device (e.g. /dev/nvme0n1p3)\n"
-                           // "  --force            Skip partition size safety check\n"
-                           "        --help                    Show this help message\n" RESET
-            );
-            out->parse_error = false;
-            out->cli_mode = false;
-            return true;   /* signal: help shown, suppress GUI and CLI */
-
-        }
 
         /* CLI flags */
         if (strcmp(arg, "--image") == 0) {
@@ -562,8 +556,6 @@ bool restore_run_cli(const char *image_path,
                      const char *target_device,
                      bool force)
 {
-    (void)force; /* force is intentionally unused for now */
-
     if (!image_path || !target_device) {
         fprintf(stderr, RED "ERROR:" WHITE " missing required arguments.\n");
         return false;
@@ -585,7 +577,6 @@ bool restore_run_cli(const char *image_path,
      * --------------------------------------------------------- */
     MetadataInfo meta;
     if (!load_metadata_or_exit(base_image, &meta)) {
-        /* load_metadata_or_exit() already prints error */
         return false;
     }
 
@@ -614,10 +605,6 @@ bool restore_run_cli(const char *image_path,
         return false;
     }
 
-    /* ---------------------------------------------------------
-     * Partclone cannot restore to a smaller partition.
-     * This is a hard limitation and cannot be overridden.
-     * --------------------------------------------------------- */
     if (tgt_bytes < meta.partition_size_bytes) {
         fprintf(stderr,
                 RED "ERROR:" WHITE " Target partition is smaller than the original.\n"
@@ -627,6 +614,32 @@ bool restore_run_cli(const char *image_path,
                 meta.partition_size_bytes / 1e9,
                 tgt_bytes / 1e9);
         return false;
+    }
+
+    /* ---------------------------------------------------------
+     * 4b. CLI confirmation (unless --force)
+     * --------------------------------------------------------- */
+    if (!force) {
+        fprintf(stderr,
+                RED "WARNING:\n"
+                WHITE "You are about to overwrite the partition:" YELLOW "  %s\n\n" WHITE
+                "All data on this partition will be permanently lost.\n"
+                "This action cannot be undone.\n\n"
+                "Proceed? [y/N]: " RESET,
+                target_device);
+
+        fflush(stderr);
+
+        char buf[16] = {0};
+        if (!fgets(buf, sizeof(buf), stdin)) {
+            fprintf(stderr, RED "ERROR:" WHITE " Failed to read input.\n");
+            return false;
+        }
+
+        if (buf[0] != 'y' && buf[0] != 'Y') {
+            fprintf(stderr, YELLOW "\nRestore cancelled.\n");
+            return false;
+        }
     }
 
     /* ---------------------------------------------------------
@@ -646,4 +659,23 @@ bool restore_run_cli(const char *image_path,
     }
 
     return true;
+}
+
+
+bool print_restore_usage(struct parse_output *out)
+{
+    fprintf(stderr,
+            YELLOW "\nUsage:" WHITE " imprintr --image <path> --target <device>\n"
+            "       imprintr <image> <device>\n\n"
+            YELLOW "Options:\n" WHITE
+            "        --image <image file>      Path and filename of backup image (.img.zst, .img.lz4, .000, etc.)\n"
+            "        --target <device>         Destination block device (e.g. /dev/nvme0n1p3)\n"
+            "        --force                   Skip confirmation prompts and proceed non‑interactively\n"
+            "        --help                    Show this help message\n"
+            RESET
+    );
+
+    out->parse_error = false;
+    out->cli_mode = false;
+    return true;    /* signal: help shown, suppress GUI and CLI */
 }

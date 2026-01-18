@@ -37,6 +37,42 @@ void ui_info(const char *message)
     system(cmd);
 }
 
+bool ui_confirm(const char *message)
+{
+    if (gx_no_gui) {
+        /* CLI fallback */
+        fprintf(stderr, "%s [y/N]: ", message);
+        fflush(stderr);
+
+        char buf[16] = {0};
+        if (!fgets(buf, sizeof(buf), stdin))
+            return false;
+
+        return (buf[0] == 'y' || buf[0] == 'Y');
+    }
+
+    /* GUI mode: Zenity Yes/No dialog */
+    char cmd[2048];
+    snprintf(cmd, sizeof(cmd),
+             "zenity --question "
+             "--title='Confirm restore' "
+             "--text='%s' "
+             "2>/dev/null",
+             message);
+
+    int rc = system(cmd);
+
+    /* Zenity returns:
+     *       0 = Yes
+     *       1 = No
+     *       5 = dialog closed
+     */
+    return (rc == 0);
+}
+
+
+
+
 
 /* Directory chooser */
 char *ui_choose_directory(void)

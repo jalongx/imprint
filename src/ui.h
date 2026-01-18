@@ -12,6 +12,8 @@
  *  - showing info/error dialogs
  */
 
+bool ui_confirm(const char *message);
+
 /* Show an error dialog with Zenity. */
 void ui_error(const char *message);
 
