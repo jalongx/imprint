@@ -102,3 +102,11 @@ v0.9.46, 17‑Jan‑2026 - Backup and Restore overwrite‑safety for both GUI an
 - Added "Are you sure??" overwrite confirmations to GUI and CLI backup modes when a matching image already existed.
 - Introduced --force flag for CLI backups, enabling unattended and scripted backups that overwrite an existing image file/file series.
 - Fixed a minor bug where imprintr --help checked for dependencies before printing the help message.
+
+v0.9.5, 18-Jan-2026 - Recovery of essential metadata if metadata file is missing or corrupted
+- Added --make-json flag to imprint-sniffer which creates a new metadata file that contains only the information essential to restore.
+- Sniffer detects the image compression, partclone backend and single vs. chunked status
+- The newly created metadata file has been tested with both single-file and chunked images
+- Filesystem sice is inconsistently detected by sniffer since the partclone header information seems to vary depending on the filesystem.
+
+

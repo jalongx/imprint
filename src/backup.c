@@ -804,7 +804,7 @@ bool backup_run_cli(const char *device,
      * --------------------------------------------- */
     struct stat st;
     if (stat(device, &st) != 0) {
-        ui_error(RED "Source device does not exist." RESET);
+        ui_error(WHITE "Source device does not exist." RESET);
         return false;
     }
 
@@ -812,7 +812,7 @@ bool backup_run_cli(const char *device,
      * Reject mounted source partitions
      * --------------------------------------------- */
     if (gx_is_partition_mounted(device)) {
-        ui_error(RED "The source partition is mounted and cannot be backed up." RESET);
+        ui_error(WHITE "The source partition is mounted and cannot be backed up." RESET);
         return false;
     }
 
@@ -821,7 +821,7 @@ bool backup_run_cli(const char *device,
      * --------------------------------------------- */
     const char *slash = strrchr(output_path, '/');
     if (!slash) {
-        ui_error(RED "Output path must include a directory." RESET);
+        ui_error(WHITE "Output path must include a directory." RESET);
         return false;
     }
 

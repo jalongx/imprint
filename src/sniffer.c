@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <ctype.h>
 
+
 /* Read first len bytes from file */
 static bool
 read_magic(const char *path, unsigned char *buf, size_t len)

@@ -102,7 +102,11 @@ load_metadata_or_exit(const char *image_base, MetadataInfo *meta)
         ui_error(
             WHITE "This image does not have a matching metadata file.\n\n"
             "       Imprint requires metadata to safely restore an image.\n"
-            "       Restore cannot continue." RESET
+            "       If your metadata file is missing or corrupted, you can use\n"
+            "       imprint-sniffer to create a metadata file with the\n"
+            "       essential values necessary for a restore.\n\n"
+            GREEN "       imprint-sniffer -make-json <image file>\n\n" RESET
+            YELLOW "       Restore cannot continue." RESET
         );
         return false;
     }

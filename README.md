@@ -124,8 +124,8 @@ Imprint is currently **version 0.92** — stable and fully usable, but still evo
 Here’s what’s planned for the 1.0 milestone (and beyond):
 
 - **Command‑line switches** for automation and headless use. ✔️ *Completed*
-- **Multi‑partition backup/restore**
-- **Sniffer** integration in the restore process to validate essential metadata values when metadata values are missing or corrupted.
+- **GUI multi‑partition backup/restore** 
+- **Sniffer** integration in the restore process to validate essential metadata values when metadata values are missing or corrupted. ✔️ *Completed*
 - **Verification‑only mode** (validate images without restoring)
 - **Logging** for headless operation.
 - **Improved documentation**  
