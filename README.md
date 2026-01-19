@@ -53,7 +53,7 @@ THIS IS BETA SOFTWARE. It works fine on my rather complex system but there are b
 - It has only been tested on NFS and SMB network filesystems.
 - It inherits partclone's limitations: you cannot restore an image to a partition smaller than the original.
 - It cannot restore an image to a bare drive. You have to create a partition big enough for it. The original partition size can be found in the metadata file accompanying the image.
-- It currently backs up only one partition at a time in GUI mode. If you want to back up 3 partitions, you'll have to run it 3 times. However, you can script CLI mode to backup multiple partitions at one.
+- It currently backs up only one partition at a time in GUI mode. If you want to back up 3 partitions, you'll have to run it 3 times. However, you can script CLI mode to backup multiple partitions at once.
 
 ---
 

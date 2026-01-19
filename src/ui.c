@@ -143,7 +143,7 @@ char *ui_choose_partition(void)
            "zenity --list "
            "--title='Select partition to back up' "
            "--text='Choose a partition:' "
-           "--width=1200 --height=1000 "
+           "--width=900 --height=500 "
            "--column='Path' "
            "--column='Type' "
            "--column='Filesystem' "
