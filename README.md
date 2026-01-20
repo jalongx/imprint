@@ -11,7 +11,7 @@ Imprint is a modern, safe, and mapper‑aware disk imaging tool built on partclo
 - **Rescue ISO**  
   A lightweight Arch‑based environment for full offline backup/restore or when system partitions must remain unmounted.
   
-  👉 https://github.com/jalongx/imprint_iso_kde
+       👉 https://github.com/jalongx/imprint_iso_kde
 
   
 - **Full GUI and CLI support**  
@@ -50,55 +50,56 @@ Imprint is a modern, safe, and mapper‑aware disk imaging tool built on partclo
 ## Quick Install
 
 
-### Install dependencies
+### 1. Install dependencies
 
 
-Arch / Cachyos / EndeavourOS / Manjaro
+- Arch / Cachyos / EndeavourOS / Manjaro
 ```
-sudo pacman -S partclone zenity lz4 zstd gzip
-
-```
-
-Debian / Ubuntu / Linux Mint / Pop!_OS
-```
-sudo apt update
-sudo apt install partclone zenity lz4 zstd gzip
-
+     sudo pacman -S partclone zenity lz4 zstd gzip
 ```
 
-Fedora / RHEL / Rocky / AlmaLinux
+- Debian / Ubuntu / Linux Mint / Pop!_OS
 ```
-sudo dnf install partclone zenity lz4 zstd gzip
-
-```
-
-openSUSE Leap / Tumbleweed
-```
-sudo zypper install partclone zenity lz4 zstd gzip
-
+     sudo apt update
+     sudo apt install partclone zenity lz4 zstd gzip
 ```
 
-### Clone the Repository
-
+- Fedora / RHEL / Rocky / AlmaLinux
 ```
-git clone https://github.com/jalongx/imprint.git
-cd imprint
-
+     sudo dnf install partclone zenity lz4 zstd gzip
 ```
 
-### GUI Backup or Restore
+- openSUSE Leap / Tumbleweed
+```
+     sudo zypper install partclone zenity lz4 zstd gzip
+```
+
+### 2. Download the Binaries or Clone the Repository
+- Download from the release page, or
+- Clone the repository
+```
+     git clone https://github.com/jalongx/imprint.git
+     cd imprint
+```
+
+### 3. Run GUI Backup or Restore
 
 ```
 ./imprintb
 ./imprintr
-
 ```
-### CLI Backup or Restore
 
+### 4. Run CLI Backup or Restore
+
+Backup Example:
 ```
+sudo ./imprintb /dev/sda3 /mnt/backup/myimage
 ./imprintb --help
+```
+Restore Example:
+```
+sudo ./imprintr /mnt/backup/myimage.000 /dev/sda3
 ./imprintr --help
-
 ```
 
 ---
