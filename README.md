@@ -5,14 +5,13 @@ Imprint is a modern, safe, and mapper‑aware disk imaging tool built on partclo
 - You can backup or restore unmounted **non-system** partitions from within your Linux operating system. You can backup and restore **system partitions** by booting with the Imprint Rescue ISO or booting to another Linux installation on the same computer.
 - It only backs up the data on the partition -- no raw images that are the same size as the partition you're backing up.
 
+---
 
 ## Features
 
 - **Rescue ISO**  
-  A lightweight Arch‑based environment for full offline backup/restore or when system partitions must remain unmounted.    
-  👉 https://github.com/jalongx/imprint_iso_kde
+  A lightweight Arch‑based environment for full offline backup/restore or when system partitions must remain unmounted. 👉 https://github.com/jalongx/imprint_iso_kde
 
-  
 - **Full GUI and CLI support**  
   Complete backup and restore functionality available interactively or headlessly, with unified progress output and consistent exit codes.
 
