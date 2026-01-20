@@ -80,14 +80,13 @@ Imprint is a modern, safe, and mapper‑aware disk imaging tool built on partclo
      cd imprint
 ```
 
-### 3. Run GUI Backup or Restore
-
+### 3. Run GUI Backup or Restore -- for people new to disk imagers or Linux
 ```
 ./imprintb
 ./imprintr
 ```
 
-### 4. Run CLI Backup or Restore
+### 4. Run CLI Backup or Restore -- for advanced users
 
 Backup Example:
 ```
