@@ -9,9 +9,8 @@ Imprint is a modern, safe, and mapper‑aware disk imaging tool built on partclo
 ## Features
 
 - **Rescue ISO**  
-  A lightweight Arch‑based environment for full offline backup/restore or when system partitions must remain unmounted.
-  
-       👉 https://github.com/jalongx/imprint_iso_kde
+  A lightweight Arch‑based environment for full offline backup/restore or when system partitions must remain unmounted.    
+  👉 https://github.com/jalongx/imprint_iso_kde
 
   
 - **Full GUI and CLI support**  
