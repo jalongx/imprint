@@ -1,6 +1,6 @@
 # Imprint Disk Imager
 
-Imprint provides a safe way to back up and restore disk partitions using partclone. It includes both a simple Zenity‑based UI and a full command‑line interface for headless or automated workflows.
+Imprint is a modern, safe, and mapper‑aware disk imaging tool built on partclone. It backs up only the used data, supports LUKS and LVM, and works both inside Linux and from a rescue ISO — without the complexity or the hardware limitations of older imaging tools.
 
 - You can backup or restore unmounted **non-system** partitions from within your Linux operating system. You can backup and restore **system partitions** by booting with the Imprint Rescue ISO or booting to another Linux installation on the same computer.
 - It only backs up the data on the partition -- no raw images that are the same size as the partition you're backing up.
@@ -8,6 +8,12 @@ Imprint provides a safe way to back up and restore disk partitions using partclo
 
 ## Features
 
+- **Rescue ISO**  
+  A lightweight Arch‑based environment for full offline backup/restore or when system partitions must remain unmounted.
+  
+  👉 https://github.com/jalongx/imprint_iso_kde
+
+  
 - **Full GUI and CLI support**  
   Complete backup and restore functionality available interactively or headlessly, with unified progress output and consistent exit codes.
 
@@ -39,9 +45,61 @@ Imprint provides a safe way to back up and restore disk partitions using partclo
 - **Clean restore UI**  
   Only shows the correct entry for chunked images (e.g., `.000`), reducing user error.
 
-- **Rescue ISO**  
-  A lightweight Arch‑based environment for full offline backup/restore or when system partitions must remain unmounted.
-  https://github.com/jalongx/imprint_iso_kde
+---
+
+## Quick Install
+
+
+### Install dependencies
+
+
+Arch / Cachyos / EndeavourOS / Manjaro
+```
+sudo pacman -S partclone zenity lz4 zstd gzip
+
+```
+
+Debian / Ubuntu / Linux Mint / Pop!_OS
+```
+sudo apt update
+sudo apt install partclone zenity lz4 zstd gzip
+
+```
+
+Fedora / RHEL / Rocky / AlmaLinux
+```
+sudo dnf install partclone zenity lz4 zstd gzip
+
+```
+
+openSUSE Leap / Tumbleweed
+```
+sudo zypper install partclone zenity lz4 zstd gzip
+
+```
+
+### Clone the Repository
+
+```
+git clone https://github.com/jalongx/imprint.git
+cd imprint
+
+```
+
+### GUI Backup or Restore
+
+```
+./imprintb
+./imprintr
+
+```
+### CLI Backup or Restore
+
+```
+./imprintb --help
+./imprintr --help
+
+```
 
 ---
 
