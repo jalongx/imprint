@@ -51,18 +51,18 @@ Imprint is a modern, safe, and mapper‑aware disk imaging tool built on partclo
 ### 1. Install dependencies
 
 
-- Arch / Cachyos / EndeavourOS / Manjaro
+- Arch / Cachyos / EndeavourOS / Manjaro / Garuda / Anduin OS / ChimeraOS
 ```
      sudo pacman -S partclone zenity lz4 zstd gzip
 ```
 
-- Debian / Ubuntu / Linux Mint / Pop!_OS
+- Debian / Ubuntu / Linux Mint / Pop!_OS / Zorin OS
 ```
      sudo apt update
      sudo apt install partclone zenity lz4 zstd gzip
 ```
 
-- Fedora / RHEL / Rocky / AlmaLinux
+- Fedora / RHEL / Rocky / AlmaLinux / Nobara
 ```
      sudo dnf install partclone zenity lz4 zstd gzip
 ```
@@ -99,6 +99,19 @@ Restore Example:
 sudo ./imprintr /mnt/backup/myimage.000 /dev/sda3
 ./imprintr --help
 ```
+---
+
+## Using Imprint on Windows Systems
+
+Imprint works perfectly for Windows users when run from the **Imprint Rescue ISO**.  
+You do not need Linux installed — simply boot the ISO from a USB stick and you can:
+
+- back up Windows partitions  
+- restore Windows partitions  
+- image NVMe, SATA, USB, and RAID volumes  
+- work offline without touching the installed OS  
+
+This makes Imprint a safe, modern alternative to classic tools like Clonezilla or Acronis — with a clean UI and strong integrity guarantees.
 
 ---
 
@@ -122,20 +135,6 @@ The Linux options I found required booting rescue ISOs that often lacked support
 So I began writing a small wrapper around partclone… then added features… then added a rescue ISO… 
 
 Imprint now lets me easily create or restore an image for any partition I can safely unmount. For core system partitions, I boot into a tiny maintenance/rescue Linux installation (a habit from the early 1990s) and run Imprint from there. Once the rescue ISO was working, I decided that releasing the tool might benefit both long-time Linux users and other windows refugees like myself.
-
----
-
-## Using Imprint on Windows Systems
-
-Imprint works perfectly for Windows users when run from the **Imprint Rescue ISO**.  
-You do not need Linux installed — simply boot the ISO from a USB stick and you can:
-
-- back up Windows partitions  
-- restore Windows partitions  
-- image NVMe, SATA, USB, and RAID volumes  
-- work offline without touching the installed OS  
-
-This makes Imprint a safe, modern alternative to classic tools like Clonezilla or Acronis — with a clean UI and strong integrity guarantees.
 
 ---
 
